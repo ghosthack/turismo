@@ -20,9 +20,6 @@ Testing with standalone jetty
 
     package com.ghosthack.turismo.example;
     
-    import org.eclipse.jetty.server.*;
-    import org.eclipse.jetty.servlet.*;
-    
     import com.ghosthack.turismo.*;
     import com.ghosthack.turismo.servlet.*;
     
@@ -74,6 +71,7 @@ Implementing routes
     package com.ghosthack.turismo.example;
     
     import com.ghosthack.turismo.*;
+    import com.ghosthack.turismo.servlet.*;
     
     public class WebAppRoutes extends RoutesMap {
     
