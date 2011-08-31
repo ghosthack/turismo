@@ -4,6 +4,7 @@ import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
+import org.eclipse.jetty.webapp.WebAppContext;
 
 import com.ghosthack.turismo.servlet.Servlet;
 
@@ -27,6 +28,15 @@ public class JettyHelper {
         holder.setInitParameter("routes", routes);
         handler.addServlet(holder,mapping);
         return handler;
+    }
+
+    public static WebAppContext webapp() {
+        WebAppContext root = new WebAppContext();
+        root.setContextPath("/");
+        root.setDescriptor("src/test/webapp/WEB-INF/web.xml");
+        root.setResourceBase("src/test/webapp/");
+        root.setParentLoaderPriority(true);
+        return root;
     }
 
 }
