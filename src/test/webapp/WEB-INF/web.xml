@@ -8,12 +8,12 @@
     <servlet-class>com.ghosthack.turismo.servlet.Servlet</servlet-class>
     <init-param>
       <param-name>routes</param-name>
-      <param-value>com.ghosthack.turismo.example.App</param-value>
+      <param-value>com.ghosthack.turismo.example.TestWebAppRoutes</param-value>
     </init-param>
   </servlet>
   <servlet-mapping>
     <servlet-name>webapp-servlet</servlet-name>
-    <url-pattern>/*</url-pattern>
+    <url-pattern>/webapp/*</url-pattern>
   </servlet-mapping>
 
 </web-app>

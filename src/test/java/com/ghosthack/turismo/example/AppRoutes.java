@@ -17,7 +17,7 @@ public class AppRoutes extends RoutesMap {
     }
 
     public static void main(String[] args) throws Exception{
-        JettyHelper.server(8080, "/*", AppRoutes.class.getName());
+        JettyHelper.server(8080, "/app/*", AppRoutes.class.getName());
     }
 
 }

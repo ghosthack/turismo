@@ -8,17 +8,11 @@ import com.ghosthack.turismo.servlet.ActionException;
 import com.ghosthack.turismo.servlet.Env;
 import com.ghosthack.turismo.servlet.Executable;
 
-public class TestAppRoutes extends RoutesMap {
+public class TestWebAppRoutes extends RoutesMap {
 
     @Override
     protected void map() {
         get("/", new Action() {
-            @Override
-            public Object perform(Env env) {
-                return "Hello World!";
-            }
-        });
-        get("", new Action() {
             @Override
             public Object perform(Env env) {
                 return "Hello World!";
@@ -50,6 +44,12 @@ public class TestAppRoutes extends RoutesMap {
                 return "Hello Redirect";
             }
         });
+        get("/render", new Action() {
+            public Object perform(Env env) {
+                env.req.setAttribute("message", "Hello Word!");
+                return jsp("/jsp/render.jsp");
+            }
+        });
         post("/search", new Action() {
             public String perform(Env env) {
                 String query = env.req.getParameter("q");
@@ -69,7 +69,7 @@ public class TestAppRoutes extends RoutesMap {
     }
 
     public static void main(String[] args) throws Exception{
-        JettyHelper.server(8080, "/*", TestAppRoutes.class.getName());
+        JettyHelper.server(8080, JettyHelper.webapp());
     }
 
 }

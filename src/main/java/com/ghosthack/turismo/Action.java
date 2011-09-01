@@ -16,12 +16,17 @@ public abstract class Action implements Executable {
     }
 
     public Action(String target) {
+        jsp(target);
+    }
+    
+    public Object jsp(String target) {
         this.alias = new Alias(target);
         this.behavior = new Behavior() {
             public void behavior(Env env, Object result) {
                 alias.execute(env);
             }
         };
+        return null;
     }
 
     public Action() {

@@ -24,6 +24,7 @@ public class JettyHelper {
     public static ServletContextHandler handler(String mapping, String routes) {
         ServletContextHandler handler = new ServletContextHandler(ServletContextHandler.SESSIONS);
         handler.setContextPath("/");
+        handler.setResourceBase("./src/test/webapp/");
         ServletHolder holder = new ServletHolder(new Servlet());
         holder.setInitParameter("routes", routes);
         handler.addServlet(holder,mapping);

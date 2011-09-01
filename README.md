@@ -88,6 +88,23 @@ Implementing routes
     }
 
 
+Rendering "templates"
+---------------------
+
+Using a jsp: 
+
+        get("/render", new Action() {
+            public Object perform(Env env) {
+                env.req.setAttribute("message", "Hello Word!");
+                return jsp("/jsp/render.jsp");
+            }
+        });
+
+And the jsp contains:
+
+        <%=request.getAttribute("message")%>
+
+
 Other mappings
 --------------
 
