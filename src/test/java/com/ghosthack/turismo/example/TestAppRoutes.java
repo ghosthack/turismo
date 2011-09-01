@@ -4,7 +4,9 @@ import java.io.IOException;
 
 import com.ghosthack.turismo.Action;
 import com.ghosthack.turismo.RoutesMap;
+import com.ghosthack.turismo.servlet.ActionException;
 import com.ghosthack.turismo.servlet.Env;
+import com.ghosthack.turismo.servlet.Executable;
 
 public class TestAppRoutes extends RoutesMap {
 
@@ -16,10 +18,11 @@ public class TestAppRoutes extends RoutesMap {
                 return "Hello World!";
             }
         });
-        get("/redir", new Action() {
+        get("/redir1", new Action() {
             @Override
             public Object perform(Env env) {
-                env.res.setStatus(302);
+                //301 moved permanently
+                env.res.setStatus(301);
                 env.res.setHeader("Location", "/dest");
                 return "Redirect";
             }
@@ -28,6 +31,7 @@ public class TestAppRoutes extends RoutesMap {
             @Override
             public Object perform(Env env) {
                 try {
+                    //302 built in
                     env.res.sendRedirect("/dest");
                 } catch (IOException e) {
                 }
@@ -40,10 +44,20 @@ public class TestAppRoutes extends RoutesMap {
                 return "Hello Redirect";
             }
         });
-        notFound(new Action() {
+        post("/search", new Action() {
+            public String perform(Env env) {
+                String query = env.req.getParameter("q");
+                return "Your search query was: " + query;
+            }
+        });
+        notFound(new Executable() {
             @Override
-            public Object perform(Env env) {
-                return "Not found";
+            public void execute(Env env) {
+                try {
+                    env.res.sendError(404, "Resource not found");
+                } catch (IOException e) {
+                    throw new ActionException(e);
+                }
             }
         });
     }

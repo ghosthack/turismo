@@ -87,6 +87,32 @@ Implementing routes
     
     }
 
+
+Other mappings
+--------------
+
+Methods for GET, POST, PUT, DELETE, HEAD, OPTIONS, TRACE
+
+        post("/search", new Action() {
+            public String perform(Env env) {
+                String query = env.req.getParameter("q");
+                return "Your search query was: " + query;
+            }
+        });
+
+The default RoutesMap notFound returns 404, but you can rewire another action
+
+        notFound(new Executable() {
+            public void execute(Env env) {
+                try {
+                    env.res.sendError(404, "Resource not found");
+                } catch (IOException e) {
+                    throw new ActionException(e);
+                }
+            }
+        });
+
+
 Maven repository
 ----------------
 
