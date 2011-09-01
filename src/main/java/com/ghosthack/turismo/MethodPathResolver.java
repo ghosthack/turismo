@@ -11,17 +11,9 @@ public abstract class MethodPathResolver implements Resolver {
 
     @Override
     public Route resolve(Env env) throws ActionException {
-        final String path = extractPath(env);
-        final String method = env.req.getMethod();
-        Route route = resolvePath(method, path);
-        return route;
-    }
-
-    private Route resolvePath(String method, String path) throws ActionException {
+        String path = extractPath(env);
+        String method = env.req.getMethod();
         Route route = resolve(method, path);
-        if (route == null) {
-            throw new ActionException(UNDEFINED_ACTION + path);
-        }
         return route;
     }
 
@@ -36,7 +28,6 @@ public abstract class MethodPathResolver implements Resolver {
         return path;
     }
 
-    private static final String UNDEFINED_ACTION = "Undefined action: ";
     private static final String UNDEFINED_PATH = "Undefined path";
 
 }

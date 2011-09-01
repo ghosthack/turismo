@@ -41,8 +41,8 @@ public class Servlet extends HttpServlet {
     public void service(HttpServletRequest req, HttpServletResponse res)
             throws ServletException, IOException {
         final Env env = new Env(req, res, context);
-        final Route route = resolver.resolve(env);
         try {
+            final Route route = resolver.resolve(env);
             route.getExecutable().execute(env);
         } catch (ActionException e) {
             throw new ServletException(e);
@@ -53,14 +53,10 @@ public class Servlet extends HttpServlet {
     public void init(ServletConfig config) throws ServletException {
         super.init();
         context = config.getServletContext();
-        final String routes = config.getInitParameter(ROUTES);
-        resolver = createResolver(routes);
-    }
-
-    private Resolver createResolver(String name) throws ServletException {
+        final String routesParam = config.getInitParameter(ROUTES);
         try {
-            final Routes routes = createInstance(name, Routes.class);
-            return routes.getResolver();
+            final Routes routes = createInstance(routesParam, Routes.class);
+            resolver = routes.getResolver();
         } catch (ClassForNameException e) {
             throw new ServletException(e);
         }
