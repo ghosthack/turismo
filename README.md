@@ -7,7 +7,7 @@ Quick intro
     public class AppRoutes extends RoutesMap {
         protected void map() {
             get("/", new Action() {
-                public Object perform(Env env) {
+                public String perform(Env env) {
                     return "Hello World!";
                 }
             });
