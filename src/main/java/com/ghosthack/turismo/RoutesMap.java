@@ -48,7 +48,6 @@ public abstract class RoutesMap implements Routes {
                 return pathMap.get(path);
             }
         };
-        map();
         notFound(new Executable() {
             @Override
             public void execute(Env env) throws ActionException {
@@ -59,6 +58,7 @@ public abstract class RoutesMap implements Routes {
                 }
             }
         });
+        map();
     }
 
     protected abstract void map();
