@@ -60,7 +60,7 @@ public class TestWebAppRoutes extends RoutesMap {
             @Override
             public void execute(Env env) {
                 try {
-                    env.res.sendError(404, "Resource not found");
+                    env.res.sendError(404, "Not Found");
                 } catch (IOException e) {
                     throw new ActionException(e);
                 }
