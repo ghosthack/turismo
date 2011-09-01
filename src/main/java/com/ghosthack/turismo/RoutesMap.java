@@ -1,14 +1,10 @@
 package com.ghosthack.turismo;
 
-import java.io.IOException;
 import java.util.HashMap;
 
-import javax.servlet.http.HttpServletResponse;
-
-import com.ghosthack.turismo.servlet.ActionException;
 import com.ghosthack.turismo.servlet.Alias;
-import com.ghosthack.turismo.servlet.Env;
 import com.ghosthack.turismo.servlet.Executable;
+import com.ghosthack.turismo.servlet.NotFoundAction;
 import com.ghosthack.turismo.servlet.Resolver;
 import com.ghosthack.turismo.servlet.Route;
 import com.ghosthack.turismo.servlet.Routes;
@@ -48,16 +44,7 @@ public abstract class RoutesMap implements Routes {
                 return pathMap.get(path);
             }
         };
-        notFound(new Executable() {
-            @Override
-            public void execute(Env env) throws ActionException {
-                try {
-                    env.res.sendError(HttpServletResponse.SC_NOT_FOUND);
-                } catch (IOException e) {
-                    throw new ActionException(e);
-                }
-            }
-        });
+        notFound(new NotFoundAction());
         map();
     }
 
