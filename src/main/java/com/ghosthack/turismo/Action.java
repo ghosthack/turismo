@@ -15,11 +15,7 @@ public abstract class Action implements Executable {
         behavior.behavior(env, result);
     }
 
-    public Action(String target) {
-        jsp(target);
-    }
-    
-    public Object jsp(String target) {
+    public Void jsp(String target) {
         this.alias = new Alias(target);
         this.behavior = new Behavior() {
             public void behavior(Env env, Object result) {
