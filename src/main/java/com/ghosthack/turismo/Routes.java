@@ -1,4 +1,5 @@
-package com.ghosthack.turismo.servlet;
+package com.ghosthack.turismo;
+
 
 public interface Routes {
 
