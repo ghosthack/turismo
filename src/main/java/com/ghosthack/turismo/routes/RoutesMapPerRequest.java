@@ -4,20 +4,20 @@ import com.ghosthack.turismo.Resolver;
 import com.ghosthack.turismo.Routes;
 import com.ghosthack.turismo.resolver.MapResolver;
 
-public abstract class RoutesMap implements Routes {
-    
+public abstract class RoutesMapPerRequest implements Routes {
+
     private final Resolver resolver;
-    
-    public RoutesMap() {
+
+    public RoutesMapPerRequest() {
         resolver = new MapResolver();
-        map();
     }
 
     @Override
     public Resolver getResolver() {
+        map();
         return resolver;
     }
-    
+
     public void execute() {
         this.getResolver().resolve().run();
     }

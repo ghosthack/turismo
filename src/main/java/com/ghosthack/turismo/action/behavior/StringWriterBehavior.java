@@ -8,11 +8,9 @@ import com.ghosthack.turismo.servlet.Env;
 
 public final class StringWriterBehavior implements Behavior {
 
-    public void behave(Env env, Object result) {
+    public void on(Object result) {
         try {
-            env.res.setStatus(200);
-            env.res.getWriter().write(String.valueOf(result));
-            env.res.flushBuffer();
+            Env.res().getWriter().write(String.valueOf(result));
         } catch (IOException e) {
             throw new ActionException(e);
         }
