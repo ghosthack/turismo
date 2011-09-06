@@ -9,9 +9,9 @@ import com.ghosthack.turismo.servlet.Env;
 public class RedirectBehavior implements Behavior {
 
     @Override
-    public void behave(Env env, Object location) {
+    public void on(Object location) {
         try {
-            env.res.sendRedirect(String.valueOf(location));
+            Env.res().sendRedirect(String.valueOf(location));
         } catch (IOException e) {
             throw new ActionException(e);
         }

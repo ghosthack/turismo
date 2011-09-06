@@ -6,9 +6,9 @@ import com.ghosthack.turismo.servlet.Env;
 public class MovedPermanentlyBehavior implements Behavior {
 
     @Override
-    public void behave(Env env, Object location) {
-        env.res.setStatus(301);
-        env.res.setHeader("location", String.valueOf(location));
+    public void on(Object location) {
+        Env.res().setStatus(301);
+        Env.res().setHeader("location", String.valueOf(location));
     }
 
 }

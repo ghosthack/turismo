@@ -13,15 +13,15 @@ import com.ghosthack.turismo.servlet.Env;
 public class AliasBehavior implements Behavior {
 
     @Override
-    public void behave(Env env, Object result) {
-        forward(env, String.valueOf(result));
+    public void on(Object result) {
+        forward(String.valueOf(result));
     }
 
-    private void forward(Env env, final String target) {
-        final RequestDispatcher dispatcher = env.ctx
+    private void forward(final String target) {
+        final RequestDispatcher dispatcher = Env.ctx()
                 .getRequestDispatcher(target);
         try {
-            dispatcher.forward(env.req, env.res);
+            dispatcher.forward(Env.req(), Env.res());
         } catch (ServletException e) {
             throw new ActionException(e);
         } catch (IOException e) {

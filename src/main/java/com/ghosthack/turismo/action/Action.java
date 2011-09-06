@@ -1,49 +1,35 @@
 package com.ghosthack.turismo.action;
 
-import com.ghosthack.turismo.IAction;
 import com.ghosthack.turismo.servlet.Env;
 
-public abstract class Action implements IAction {
-    
-    @Override
-    public void perform(Env env) {
-        doPerform(env);
-    }
-    
+public abstract class Action implements Runnable {
+
     protected void alias(Env env, String target) {
-        Behaviors.forward().behave(env, target);
+        Behaviors.forward().on(target);
     }
-    protected void forward(Env env, String target) {
-        Behaviors.forward().behave(env, target);
-    }
-    protected void jsp(Env env, String path) {
-        Behaviors.jsp().behave(env, path);
-    }
-    protected void movedPermanently(Env env, String newLocation) {
-        Behaviors.movedPermanently().behave(env, newLocation);
-    }
-    protected void notFound(Env env) {
-        Behaviors.notFound().behave(env, null);
-    }
-    protected void redirect(Env env, String newLocation) {
-        Behaviors.redirect().behave(env, newLocation);
-    }
-    protected void print(Env env, String string) {
-        Behaviors.string().behave(env, string);
+
+    protected void forward(String target) {
+        Behaviors.forward().on(target);
     }
     
-    /**
-     * Fill this method with your controller implementation
-     * 
-     * @see #alias(Env, String)
-     * @see #forward(Env, String)
-     * @see #jsp(Env, String)
-     * @see #notFound(Env)
-     * @see #redirect(Env, String)
-     * @see #print(Env, String)
-     * 
-     * @param env
-     */
-    protected abstract void doPerform(Env env);
-    
+    protected void jsp(String path) {
+        Behaviors.jsp().on(path);
+    }
+
+    protected void movedPermanently(String newLocation) {
+        Behaviors.movedPermanently().on(newLocation);
+    }
+
+    protected void notFound() {
+        Behaviors.notFound().on(null);
+    }
+
+    protected void redirect(String newLocation) {
+        Behaviors.redirect().on(newLocation);
+    }
+
+    protected void print(String string) {
+        Behaviors.string().on(string);
+    }
+
 }

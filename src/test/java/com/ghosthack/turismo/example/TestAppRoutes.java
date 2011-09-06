@@ -10,45 +10,45 @@ public class TestAppRoutes extends RoutesMap {
     protected void map() {
         get("/", new Action() {
             @Override
-            public void doPerform(Env env) {
-                print(env, "Hello World!");
+            public void run() {
+                print("Hello World!");
             }
         });
         get("", new Action() {
             @Override
-            public void doPerform(Env env) {
-                print(env, "Hello World!");
+            public void run() {
+                print("Hello World!");
             }
         });
         get("/redir1", new Action() {
             @Override
-            public void doPerform(Env env) {
+            public void run() {
                 //301 moved permanently
-                movedPermanently(env, "/dest");
+                movedPermanently("/dest");
             }
         });
         get("/redir2", new Action() {
             @Override
-            public void doPerform(Env env) {
-                redirect(env, "/dest");
+            public void run() {
+                redirect("/dest");
             }
         });
         get("/dest", new Action() {
             @Override
-            public void doPerform(Env env) {
-                print(env, "Hello Redirect");
+            public void run() {
+                print("Hello Redirect");
             }
         });
         post("/search", new Action() {
-            public void doPerform(Env env) {
-                String query = env.req.getParameter("q");
-                print(env, "Your search query was: " + query);
+            public void run() {
+                String query = Env.req().getParameter("q");
+                print("Your search query was: " + query);
             }
         });
         notFound(new Action() {
             @Override
-            public void doPerform(Env env) {
-                notFound(env);
+            public void run() {
+                notFound();
             }
         });
     }

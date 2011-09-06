@@ -1,4 +1,4 @@
-package com.ghosthack.turismo;
+package com.ghosthack.turismo.routes;
 
 import static com.ghosthack.turismo.HttpMocks.getRequestMock;
 import static com.ghosthack.turismo.HttpMocks.getResponseMock;
@@ -12,8 +12,6 @@ import javax.servlet.http.HttpServletResponse;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.ghosthack.turismo.action.ActionException;
-import com.ghosthack.turismo.routes.RoutesMap;
 import com.ghosthack.turismo.servlet.Env;
 
 public class RoutesMapTest {
@@ -26,34 +24,34 @@ public class RoutesMapTest {
             @Override
             protected void map() {
                 // TEST GET
-                get("/", new IAction() {
+                get("/", new Runnable() {
                     @Override
-                    public void perform(Env env) throws ActionException {
-                        env.res.setStatus(200);
+                    public void run(){
+                        Env.res().setStatus(200);
                     }
                 });
-                get("/foo", new IAction() {
+                get("/foo", new Runnable() {
                     @Override
-                    public void perform(Env env) throws ActionException {
-                        env.res.setStatus(201);
+                    public void run() {
+                        Env.res().setStatus(201);
                     }
                 });
-                put("/", new IAction() {
+                put("/", new Runnable() {
                     @Override
-                    public void perform(Env env) throws ActionException {
-                        env.res.setStatus(202);
+                    public void run() {
+                        Env.res().setStatus(202);
                     }
                 });
-                post("/bar", new IAction() {
+                post("/bar", new Runnable() {
                     @Override
-                    public void perform(Env env) throws ActionException {
-                        env.res.setStatus(203);
+                    public void run() {
+                        Env.res().setStatus(203);
                     }
                 });
-                notFound(new IAction() {
+                notFound(new Runnable() {
                     @Override
-                    public void perform(Env env) {
-                        env.res.setStatus(404);
+                    public void run() {
+                        Env.res().setStatus(404);
                     }
                 });
             }
@@ -65,8 +63,8 @@ public class RoutesMapTest {
 
         HttpServletRequest req = getRequestMock("GET", "/");
         HttpServletResponse res = getResponseMock();
-        Env env = new Env(req, res, null);
-        routes.execute(env);
+        Env.create(req, res, null);
+        routes.execute();
 
         verify(res).setStatus(200);
     }
@@ -76,8 +74,8 @@ public class RoutesMapTest {
 
         HttpServletRequest req = getRequestMock("GET", "/foo");
         HttpServletResponse res = getResponseMock();
-        Env env = new Env(req, res, null);
-        routes.execute(env);
+        Env.create(req, res, null);
+        routes.execute();
 
         verify(res).setStatus(201);
     }
@@ -87,8 +85,8 @@ public class RoutesMapTest {
 
         HttpServletRequest req = getRequestMock("PUT", "/");
         HttpServletResponse res = getResponseMock();
-        Env env = new Env(req, res, null);
-        routes.execute(env);
+        Env.create(req, res, null);
+        routes.execute();
 
         verify(res).setStatus(202);
     }
@@ -98,8 +96,8 @@ public class RoutesMapTest {
 
         HttpServletRequest req = getRequestMock("POST", "/bar");
         HttpServletResponse res = getResponseMock();
-        Env env = new Env(req, res, null);
-        routes.execute(env);
+        Env.create(req, res, null);
+        routes.execute();
 
         verify(res).setStatus(203);
     }
@@ -109,8 +107,8 @@ public class RoutesMapTest {
 
         HttpServletRequest req = getRequestMock("POST", "/everyThingElse");
         HttpServletResponse res = getResponseMock();
-        Env env = new Env(req, res, null);
-        routes.execute(env);
+        Env.create(req, res, null);
+        routes.execute();
 
         verify(res).setStatus(404);
     }
