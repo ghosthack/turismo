@@ -1,17 +1,20 @@
-package com.ghosthack.turismo.servlet;
+package com.ghosthack.turismo.action.behavior;
 
 import java.io.IOException;
 
 import javax.servlet.RequestDispatcher;
 import javax.servlet.ServletException;
 
+import com.ghosthack.turismo.action.ActionException;
+import com.ghosthack.turismo.action.Behavior;
+import com.ghosthack.turismo.servlet.Env;
 
-public class Alias implements Executable {
+
+public class AliasBehavior implements Behavior {
 
     @Override
-    public void execute(Env env) throws ActionException {
-        final String target = getTarget();
-        forward(env, target);
+    public void behave(Env env, Object result) {
+        forward(env, String.valueOf(result));
     }
 
     private void forward(Env env, final String target) {
@@ -25,15 +28,5 @@ public class Alias implements Executable {
             throw new ActionException(e);
         }
     }
-
-    public Alias(String target) {
-        this.target = target;
-    }
-
-    public String getTarget() {
-        return target;
-    }
-
-    private String target;
 
 }
