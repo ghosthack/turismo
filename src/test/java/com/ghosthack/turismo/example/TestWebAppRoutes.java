@@ -46,7 +46,7 @@ public class TestWebAppRoutes extends RoutesMap {
                 print("Your search query was: " + query);
             }
         });
-        notFound(new Action() {
+        route(new Action() {
             @Override
             public void run() {
                 notFound();

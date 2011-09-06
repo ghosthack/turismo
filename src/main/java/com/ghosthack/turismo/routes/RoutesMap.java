@@ -54,7 +54,7 @@ public abstract class RoutesMap implements Routes {
         resolver.route(TRACE, path, runnable);
     }
 
-    protected void notFound(Runnable runnable) {
+    protected void route(Runnable runnable) {
         resolver.route(runnable);
     }
 

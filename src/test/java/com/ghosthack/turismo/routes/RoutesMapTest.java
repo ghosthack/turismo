@@ -48,7 +48,7 @@ public class RoutesMapTest {
                         Env.res().setStatus(203);
                     }
                 });
-                notFound(new Runnable() {
+                route(new Runnable() {
                     @Override
                     public void run() {
                         Env.res().setStatus(404);
