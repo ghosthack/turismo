@@ -10,46 +10,46 @@ public class TestWebAppRoutes extends RoutesMap {
     protected void map() {
         get("/", new Action() {
             @Override
-            protected void doPerform(Env env) {
-                print(env, "Hello World!");
+            public void run() {
+                print("Hello World!");
             }
         });
         get("/redir1", new Action() {
             @Override
-            protected void doPerform(Env env) {
+            public void run() {
                 //301 moved permanently
-                movedPermanently(env, "/dest");
+                movedPermanently("/dest");
             }
         });
         get("/redir2", new Action() {
             @Override
-            public void doPerform(Env env) {
+            public void run() {
                 //302 redirect
-                redirect(env, "/dest");
+                redirect("/dest");
             }
         });
         get("/dest", new Action() {
             @Override
-            public void doPerform(Env env) {
-                print(env,"Hello Redirect");
+            public void run() {
+                print("Hello Redirect");
             }
         });
         get("/render", new Action() {
-            public void doPerform(Env env) {
-                env.req.setAttribute("message", "Hello Word!");
-                jsp(env, "/jsp/render.jsp");
+            public void run() {
+                Env.req().setAttribute("message", "Hello Word!");
+                jsp("/jsp/render.jsp");
             }
         });
         post("/search", new Action() {
-            public void doPerform(Env env) {
-                String query = env.req.getParameter("q");
-                print(env, "Your search query was: " + query);
+            public void run() {
+                String query = Env.req().getParameter("q");
+                print("Your search query was: " + query);
             }
         });
         notFound(new Action() {
             @Override
-            public void doPerform(Env env) {
-                notFound(env);
+            public void run() {
+                notFound();
             }
         });
     }

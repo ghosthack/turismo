@@ -1,13 +1,12 @@
 package com.ghosthack.turismo;
 
-import com.ghosthack.turismo.servlet.Env;
 
 public interface Resolver {
 
-    IAction resolve(Env env);
+    Runnable resolve();
 
-    void route(String method, String path, IAction dispatch);
+    void route(String method, String path, Runnable runnable);
 
-    void notFoundRoute(IAction dispatch);
+    void route(Runnable runnable);
 
 }

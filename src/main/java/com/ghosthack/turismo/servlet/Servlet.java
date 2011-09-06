@@ -11,7 +11,6 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import com.ghosthack.turismo.IAction;
 import com.ghosthack.turismo.Resolver;
 import com.ghosthack.turismo.Routes;
 import com.ghosthack.turismo.action.ActionException;
@@ -44,18 +43,21 @@ public class Servlet extends HttpServlet {
     private static final String ROUTES = "routes";
     private static final long serialVersionUID = 1L;
     
-    private transient Resolver resolver;
+    private transient Routes routes;
     private transient ServletContext context;
 
     @Override
     public void service(HttpServletRequest req, HttpServletResponse res)
             throws ServletException, IOException {
-        final Env env = new Env(req, res, context);
+        Env.create(req, res, context);
         try {
-            final IAction action = resolver.resolve(env);
-            action.perform(env);
+            final Runnable action = routes.getResolver().resolve();
+            action.run();
+        
         } catch (ActionException e) {
             throw new ServletException(e);
+        } finally {
+            Env.destroy();
         }
     }
 
@@ -65,8 +67,7 @@ public class Servlet extends HttpServlet {
         context = config.getServletContext();
         final String routesParam = config.getInitParameter(ROUTES);
         try {
-            final Routes routes = createInstance(routesParam, Routes.class);
-            resolver = routes.getResolver();
+            routes = createInstance(routesParam, Routes.class);
         } catch (ClassForNameException e) {
             throw new ServletException(e);
         }

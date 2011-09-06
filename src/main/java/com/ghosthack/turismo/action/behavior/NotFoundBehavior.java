@@ -11,9 +11,9 @@ import com.ghosthack.turismo.servlet.Env;
 public class NotFoundBehavior implements Behavior {
 
     @Override
-    public void behave(Env env, Object result) {
+    public void on(Object result) {
         try {
-            env.res.sendError(HttpServletResponse.SC_NOT_FOUND);
+            Env.res().sendError(HttpServletResponse.SC_NOT_FOUND);
         } catch (IOException e) {
             throw new ActionException(e);
         }        
