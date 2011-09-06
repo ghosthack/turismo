@@ -1,21 +1,23 @@
-package com.ghosthack.turismo;
+package com.ghosthack.turismo.resolver;
 
-import com.ghosthack.turismo.servlet.ActionException;
+import com.ghosthack.turismo.Resolver;
+import com.ghosthack.turismo.IAction;
+import com.ghosthack.turismo.action.ActionException;
 import com.ghosthack.turismo.servlet.Env;
-import com.ghosthack.turismo.servlet.Resolver;
-import com.ghosthack.turismo.servlet.Route;
 
 public abstract class MethodPathResolver implements Resolver {
 
-    public abstract Route resolve(String method, String path);
+    private static final String UNDEFINED_PATH = "Undefined path";
 
     @Override
-    public Route resolve(Env env) throws ActionException {
+    public IAction resolve(Env env) throws ActionException {
         String path = extractPath(env);
         String method = env.req.getMethod();
-        Route route = resolve(method, path);
+        IAction route = resolve(method, path);
         return route;
     }
+
+    protected abstract IAction resolve(String method, String path);
 
     private String extractPath(Env env) throws ActionException {
         String path = env.req.getPathInfo();
@@ -27,7 +29,5 @@ public abstract class MethodPathResolver implements Resolver {
         }
         return path;
     }
-
-    private static final String UNDEFINED_PATH = "Undefined path";
 
 }

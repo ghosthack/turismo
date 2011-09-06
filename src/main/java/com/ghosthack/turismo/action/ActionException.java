@@ -1,4 +1,4 @@
-package com.ghosthack.turismo.servlet;
+package com.ghosthack.turismo.action;
 
 public class ActionException extends RuntimeException {
 
