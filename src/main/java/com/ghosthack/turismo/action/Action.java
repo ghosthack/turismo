@@ -4,7 +4,7 @@ package com.ghosthack.turismo.action;
 public abstract class Action implements Runnable {
 
     protected void alias(String target) {
-        Behaviors.forward().on(target);
+        forward(target);
     }
 
     protected void forward(String target) {
