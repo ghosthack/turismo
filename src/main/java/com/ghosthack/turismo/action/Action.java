@@ -1,10 +1,9 @@
 package com.ghosthack.turismo.action;
 
-import com.ghosthack.turismo.servlet.Env;
 
 public abstract class Action implements Runnable {
 
-    protected void alias(Env env, String target) {
+    protected void alias(String target) {
         Behaviors.forward().on(target);
     }
 
