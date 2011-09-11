@@ -16,47 +16,56 @@ public class ListResolver extends MethodPathResolver {
     private static final String WILDCARD = "*";
     
     public static class ParsedEntry {
-        Runnable runnable;
-        String[] parts;
-        List<Integer> paramList;
-        List<Integer> wildcardList;
+        private final Runnable runnable;
+        private final String path;
+        private String[] parts;
+        private List<Integer> paramList;
+        private List<Integer> wildcardList;
         private Set<Entry<String, Integer>> params;
+        public ParsedEntry(Runnable runnable, String path) {
+            super();
+            if(runnable == null || path == null)
+                throw new IllegalArgumentException();
+            this.runnable = runnable;
+            this.path = path;
+            parts = path.split("/");
+            if(parts.length>0) {
+                Map<String, Integer> paramMap = new HashMap<String, Integer>(parts.length);
+                paramList = new ArrayList<Integer>(parts.length);
+                wildcardList = new ArrayList<Integer>(parts.length);
+                for(int i = 0; i<parts.length; i++) {
+                    if(WILDCARD.equals(parts[i])) {
+                        wildcardList.add(i);
+                    } else if(parts[i].startsWith(SYMBOL_PREFIX)) {
+                        String sub = parts[i].substring(1);
+                        paramMap.put(sub, i);
+                        paramList.add(i);
+                    }
+                }
+                params = paramMap.entrySet();
+            }
+        }
+        public boolean isParam(int i) {
+            if(wildcardList == null)
+                return false;
+            return paramList.contains(i);
+        }
+        public boolean isWildcard(int i) {
+            if(wildcardList == null)
+                return false;
+            return wildcardList.contains(i);
+        }
+        public Set<Entry<String, Integer>> getParams() {
+            return params;
+        }
+        public boolean pathEquals(String path) {
+            return this.path.equals(path);
+        }
         public String[] getParts() {
             return parts;
         }
         public Runnable getRunnable() {
             return runnable;
-        }
-        public ParsedEntry(Runnable runnable, String path) {
-            super();
-            this.runnable = runnable;
-            if(path != null) {
-                String[] parts = path.split("/");
-                if(parts.length>0) {
-                    HashMap<String, Integer> paramMap = new HashMap<String, Integer>(parts.length);
-                    paramList = new ArrayList<Integer>(parts.length);
-                    wildcardList = new ArrayList<Integer>(parts.length);
-                    for(int i = 0; i<parts.length; i++) {
-                        if(WILDCARD.equals(parts[i])) {
-                            wildcardList.add(i);
-                        } else if(parts[i].startsWith(SYMBOL_PREFIX)) {
-                            String sub = parts[i].substring(1);
-                            paramMap.put(sub, i);
-                            paramList.add(i);
-                        }
-                    }
-                    params = paramMap.entrySet();
-                }
-            }
-        }
-        public boolean isParam(int i) {
-            return paramList.contains(i);
-        }
-        public boolean isWildcard(int i) {
-            return wildcardList.contains(i);
-        }
-        public Set<Entry<String, Integer>> getParams() {
-            return params;
         }
     }
     
@@ -87,39 +96,41 @@ public class ListResolver extends MethodPathResolver {
         List<ParsedEntry> pathList = methodpathList.get(method);
         if(pathList != null) {
             if(path != null) {
-                String[] splitted = path.split("/");
                 for(ParsedEntry parsedEntry: pathList) {
-                    if(parsedEntry != null) {
-                        String[] parts = parsedEntry.getParts();
-                        if(parts != null) {
-                            if(parts.length != splitted.length) {
-                                boolean match = true;
-                                boolean hasParams = false;
-                                for(int i = 0; i < splitted.length; i++) {
-                                    if(parsedEntry.isWildcard(i)) {
-                                        // skipped
-                                    } else if(parsedEntry.isParam(i)) {
-                                        // it's a resource "symbol"
-                                        hasParams = true;
-                                    } else if(parts[i].equals(splitted[i])) {
-                                        // exact match
-                                    } else {
-                                        // not a match
-                                        match = false;
-                                        break;
+                    String[] parts = parsedEntry.getParts();
+                    if(parts == null) {
+                        if(parsedEntry.pathEquals(path)) {
+                            return parsedEntry.getRunnable();
+                        }
+                    } else {
+                        String[] splitted = path.split("/");
+                        if(parts.length == splitted.length) {
+                            boolean match = true;
+                            boolean hasParams = false;
+                            for(int i = 0; i < splitted.length; i++) {
+                                if(parsedEntry.isWildcard(i)) {
+                                    // skipped
+                                } else if(parsedEntry.isParam(i)) {
+                                    // it's a resource "symbol"
+                                    hasParams = true;
+                                } else if(parts[i].equals(splitted[i])) {
+                                    // exact match
+                                } else {
+                                    // not a match
+                                    match = false;
+                                    break;
+                                }
+                            }
+                            if(match) {
+                                if(hasParams) {
+                                    Map<String, String> params = new HashMap<String, String>();
+                                    for(Map.Entry<String, Integer> paramsEntry: parsedEntry.getParams()) {
+                                        String paramKey = paramsEntry.getKey();
+                                        Integer paramPos = paramsEntry.getValue();
+                                        params.put(paramKey, splitted[paramPos]);
                                     }
                                 }
-                                if(match) {
-                                    if(hasParams) {
-                                        Map<String, String> params = new HashMap<String, String>();
-                                        for(Map.Entry<String, Integer> paramsEntry: parsedEntry.getParams()) {
-                                            String paramKey = paramsEntry.getKey();
-                                            Integer paramPos = paramsEntry.getValue();
-                                            params.put(paramKey, splitted[paramPos]);
-                                        }
-                                    }
-                                    return parsedEntry.getRunnable();
-                                }
+                                return parsedEntry.getRunnable();
                             }
                         }
                     }
