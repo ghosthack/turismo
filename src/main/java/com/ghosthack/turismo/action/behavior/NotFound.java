@@ -5,13 +5,11 @@ import java.io.IOException;
 import javax.servlet.http.HttpServletResponse;
 
 import com.ghosthack.turismo.action.ActionException;
-import com.ghosthack.turismo.action.Behavior;
 import com.ghosthack.turismo.servlet.Env;
 
-public class NotFoundBehavior implements Behavior {
+public class NotFound {
 
-    @Override
-    public void on(Object result) {
+    public void send404() {
         try {
             Env.res().sendError(HttpServletResponse.SC_NOT_FOUND);
         } catch (IOException e) {

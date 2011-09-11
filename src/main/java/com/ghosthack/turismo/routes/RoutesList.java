@@ -2,6 +2,7 @@ package com.ghosthack.turismo.routes;
 
 import com.ghosthack.turismo.Resolver;
 import com.ghosthack.turismo.Routes;
+import com.ghosthack.turismo.action.NotFoundAction;
 import com.ghosthack.turismo.resolver.ListResolver;
 
 public abstract class RoutesList implements Routes {
@@ -10,6 +11,7 @@ public abstract class RoutesList implements Routes {
     
     public RoutesList() {
         resolver = new ListResolver();
+        resolver.route(new NotFoundAction());
         map();
     }
 

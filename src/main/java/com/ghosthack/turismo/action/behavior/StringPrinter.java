@@ -3,14 +3,13 @@ package com.ghosthack.turismo.action.behavior;
 import java.io.IOException;
 
 import com.ghosthack.turismo.action.ActionException;
-import com.ghosthack.turismo.action.Behavior;
 import com.ghosthack.turismo.servlet.Env;
 
-public final class StringWriterBehavior implements Behavior {
+public final class StringPrinter {
 
-    public void on(Object result) {
+    public void print(String string) {
         try {
-            Env.res().getWriter().write(String.valueOf(result));
+            Env.res().getWriter().write(string);
         } catch (IOException e) {
             throw new ActionException(e);
         }

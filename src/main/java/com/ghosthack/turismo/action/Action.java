@@ -4,6 +4,12 @@ import javax.servlet.ServletContext;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import com.ghosthack.turismo.action.behavior.Alias;
+import com.ghosthack.turismo.action.behavior.MovedPermanently;
+import com.ghosthack.turismo.action.behavior.MovedTemporarily;
+import com.ghosthack.turismo.action.behavior.NotFound;
+import com.ghosthack.turismo.action.behavior.Redirect;
+import com.ghosthack.turismo.action.behavior.StringPrinter;
 import com.ghosthack.turismo.servlet.Env;
 
 
@@ -26,27 +32,31 @@ public abstract class Action implements Runnable {
     }
 
     protected void forward(String target) {
-        Behaviors.forward().on(target);
+        new Alias().forward(target);
     }
     
     protected void jsp(String path) {
-        Behaviors.jsp().on(path);
+        forward(path);
     }
 
     protected void movedPermanently(String newLocation) {
-        Behaviors.movedPermanently().on(newLocation);
+        new MovedPermanently().send301(newLocation);
+    }
+
+    protected void movedTemporarily(String newLocation) {
+        new MovedTemporarily().send302(newLocation);
     }
 
     protected void notFound() {
-        Behaviors.notFound().on(null);
+        new NotFound().send404();
     }
 
     protected void redirect(String newLocation) {
-        Behaviors.redirect().on(newLocation);
+        new Redirect().redirect(newLocation);
     }
 
     protected void print(String string) {
-        Behaviors.string().on(string);
+        new StringPrinter().print(string);
     }
 
 }

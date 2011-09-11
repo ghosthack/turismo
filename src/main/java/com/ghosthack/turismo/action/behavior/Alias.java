@@ -6,18 +6,12 @@ import javax.servlet.RequestDispatcher;
 import javax.servlet.ServletException;
 
 import com.ghosthack.turismo.action.ActionException;
-import com.ghosthack.turismo.action.Behavior;
 import com.ghosthack.turismo.servlet.Env;
 
 
-public class AliasBehavior implements Behavior {
+public class Alias {
 
-    @Override
-    public void on(Object result) {
-        forward(String.valueOf(result));
-    }
-
-    private void forward(final String target) {
+    public void forward(final String target) {
         final RequestDispatcher dispatcher = Env.ctx()
                 .getRequestDispatcher(target);
         try {
