@@ -20,10 +20,6 @@ public abstract class RoutesList implements Routes {
         return resolver;
     }
     
-    public void execute() {
-        this.getResolver().resolve().run();
-    }
-
     protected abstract void map();
 
     // Shortcuts methods

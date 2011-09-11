@@ -19,10 +19,6 @@ public abstract class RoutesMap implements Routes {
     public Resolver getResolver() {
         return resolver;
     }
-    
-    public void execute() {
-        this.getResolver().resolve().run();
-    }
 
     protected abstract void map();
 

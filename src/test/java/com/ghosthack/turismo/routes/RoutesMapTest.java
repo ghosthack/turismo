@@ -64,7 +64,7 @@ public class RoutesMapTest {
         HttpServletRequest req = getRequestMock("GET", "/");
         HttpServletResponse res = getResponseMock();
         Env.create(req, res, null);
-        routes.execute();
+        routes.getResolver().resolve().run();
 
         verify(res).setStatus(200);
     }
@@ -75,7 +75,7 @@ public class RoutesMapTest {
         HttpServletRequest req = getRequestMock("GET", "/foo");
         HttpServletResponse res = getResponseMock();
         Env.create(req, res, null);
-        routes.execute();
+        routes.getResolver().resolve().run();
 
         verify(res).setStatus(201);
     }
@@ -86,7 +86,7 @@ public class RoutesMapTest {
         HttpServletRequest req = getRequestMock("PUT", "/");
         HttpServletResponse res = getResponseMock();
         Env.create(req, res, null);
-        routes.execute();
+        routes.getResolver().resolve().run();
 
         verify(res).setStatus(202);
     }
@@ -97,7 +97,7 @@ public class RoutesMapTest {
         HttpServletRequest req = getRequestMock("POST", "/bar");
         HttpServletResponse res = getResponseMock();
         Env.create(req, res, null);
-        routes.execute();
+        routes.getResolver().resolve().run();
 
         verify(res).setStatus(203);
     }
@@ -108,7 +108,7 @@ public class RoutesMapTest {
         HttpServletRequest req = getRequestMock("POST", "/everyThingElse");
         HttpServletResponse res = getResponseMock();
         Env.create(req, res, null);
-        routes.execute();
+        routes.getResolver().resolve().run();
 
         verify(res).setStatus(404);
     }
