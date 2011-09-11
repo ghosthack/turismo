@@ -4,11 +4,11 @@ turismo -- a sinatra-like Java web framework without sinatra goodness.
 Quick intro
 -----------
 
-    public class AppRoutes extends RoutesMap {
+    public class AppRoutes extends RoutesList {
         protected void map() {
             get("/", new Action() {
-                public String perform(Env env) {
-                    return "Hello World!";
+                public void run() {
+                    print("Hello World!");
                 }
             });
         }
@@ -20,17 +20,17 @@ Testing with standalone jetty
 
     package com.ghosthack.turismo.example;
     
-    import com.ghosthack.turismo.*;
-    import com.ghosthack.turismo.servlet.*;
+    import com.ghosthack.turismo.action.*;
+    import com.ghosthack.turismo.routes.*;
     
-    public class AppRoutes extends RoutesMap {
+    public class AppRoutes extends RoutesList {
     
         @Override
         protected void map() {
             get("/", new Action() {
                 @Override
-                public Object perform(Env env) {
-                    return "Hello World!";
+                public void run() {
+                    print("Hello World!");
                 }
             });
         }
@@ -70,17 +70,17 @@ Implementing routes
 
     package com.ghosthack.turismo.example;
     
-    import com.ghosthack.turismo.*;
-    import com.ghosthack.turismo.servlet.*;
+    import com.ghosthack.turismo.action.*;
+    import com.ghosthack.turismo.routes.*;
     
-    public class WebAppRoutes extends RoutesMap {
+    public class WebAppRoutes extends RoutesList {
     
         @Override
         protected void map() {
             get("/", new Action() {
                 @Override
-                public Object perform(Env env) {
-                    return "Hello World!";
+                public void run() {
+                    print("Hello World!");
                 }
             });
         }
@@ -94,9 +94,9 @@ Rendering "templates"
 Using a jsp: 
 
         get("/render", new Action() {
-            public Object perform(Env env) {
-                env.req.setAttribute("message", "Hello Word!");
-                return jsp("/jsp/render.jsp");
+            public void run() {
+                req().setAttribute("message", "Hello Word!");
+                jsp("/jsp/render.jsp");
             }
         });
 
@@ -111,18 +111,18 @@ Other mappings
 Methods for GET, POST, PUT, DELETE, HEAD, OPTIONS, TRACE
 
         post("/search", new Action() {
-            public String perform(Env env) {
-                String query = env.req.getParameter("q");
-                return "Your search query was: " + query;
+            public void run() {
+                String query = req().getParameter("q");
+                print("Your search query was: " + query)
             }
         });
 
-The default RoutesMap notFound returns 404, but you can rewire another action
+The default route in RoutesMap/RoutesList sends a 404. Rewire with another action:
 
-        notFound(new Executable() {
-            public void execute(Env env) {
+        route(new Action() {
+            public void run() {
                 try {
-                    env.res.sendError(404, "Resource not found");
+                    res().sendError(404, "Not Found");
                 } catch (IOException e) {
                     throw new ActionException(e);
                 }
