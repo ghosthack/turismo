@@ -1,5 +1,8 @@
 package com.ghosthack.turismo.servlet;
 
+import java.util.Collections;
+import java.util.Map;
+
 import javax.servlet.ServletContext;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -33,9 +36,23 @@ public class Env {
         return get().getCtx();
     }
 
+    public static void setResourceParams(Map<String, String> params) {
+        get().setParams(params);
+    }
+
+    public static String params(String key) {
+        Map<String, String> params2 = get().getParams();
+        String string = params2.get(key);
+        if(string == null) {
+            return Env.req().getParameter(key);
+        }
+        return string;
+    }
+
     private HttpServletRequest req;
     private HttpServletResponse res;
     private ServletContext ctx;
+    private Map<String, String> params = Collections.emptyMap(); 
 
     private Env(HttpServletRequest req, HttpServletResponse res,
             ServletContext context) {
@@ -54,5 +71,14 @@ public class Env {
 
     public HttpServletResponse getRes() {
         return res;
-    }    
+    }
+
+    public void setParams(Map<String, String> params) {
+        this.params = params;
+    }
+
+    public Map<String, String> getParams() {
+        return params;
+    }
+
 }

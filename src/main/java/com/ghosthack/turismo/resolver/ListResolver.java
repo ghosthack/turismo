@@ -7,6 +7,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
+import com.ghosthack.turismo.servlet.Env;
+
 
 public class ListResolver extends MethodPathResolver {
     
@@ -125,6 +127,7 @@ public class ListResolver extends MethodPathResolver {
                                         Integer paramPos = paramsEntry.getValue();
                                         params.put(paramKey, splitted[paramPos]);
                                     }
+                                    Env.setResourceParams(params);
                                 }
                                 return parsedEntry.getRunnable();
                             }

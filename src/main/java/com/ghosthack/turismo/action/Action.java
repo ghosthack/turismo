@@ -15,6 +15,10 @@ import com.ghosthack.turismo.servlet.Env;
 
 public abstract class Action implements Runnable {
 
+    protected String params(String key) {
+        return Env.params(key);
+    }
+
     protected HttpServletRequest req() {
         return Env.req();
     }
