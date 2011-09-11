@@ -14,6 +14,19 @@ Quick intro
         }
     }
 
+Using wildcards and resource identifiers
+----------------------------------------
+
+    public class AppRoutes extends RoutesList {
+        protected void map() {
+            get("/wildcard/*/:id", new Action() {
+                public void run() {
+                    String id = params("id");
+                    print("wildcard id " + id);
+                }
+            });
+        }
+    }
 
 Testing with standalone jetty
 -----------------------------
