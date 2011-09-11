@@ -23,7 +23,12 @@ public class TestAppRoutesList extends RoutesList {
         get("/wild/*/card/:id", new Action() {
             @Override
             public void run() {
-                print("Hello World!");
+                String id = params("id");
+                String id2 = params("id2");
+                print("id ");
+                print(id);
+                print("id2 ");
+                print(id2);
             }
         });
         get("/redir1", new Action() {
