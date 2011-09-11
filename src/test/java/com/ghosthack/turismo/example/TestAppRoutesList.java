@@ -25,10 +25,7 @@ public class TestAppRoutesList extends RoutesList {
             public void run() {
                 String id = params("id");
                 String id2 = params("id2");
-                print("id ");
-                print(id);
-                print("id2 ");
-                print(id2);
+                print("id " + id + " id2 " + id2);
             }
         });
         get("/redir1", new Action() {
