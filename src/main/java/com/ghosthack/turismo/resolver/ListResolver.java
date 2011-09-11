@@ -87,10 +87,6 @@ public class ListResolver extends MethodPathResolver {
         this.defaultRunnable = runnable;
     }
     
-    public Runnable testResolve(String method, String path) {
-        return resolve(method, path);
-    }
-
     @Override
     protected Runnable resolve(String method, String path) {
         List<ParsedEntry> pathList = methodpathList.get(method);
