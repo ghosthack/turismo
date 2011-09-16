@@ -12,7 +12,7 @@ import com.ghosthack.turismo.servlet.Env;
 
 public class ListResolver extends MethodPathResolver {
     
-    private HashMap<String, List<ParsedEntry>> methodpathList;
+    private HashMap<String, List<ParsedEntry>> methodPathList;
     private Runnable defaultRunnable;
     private static final String SYMBOL_PREFIX = ":";
     private static final String WILDCARD = "*";
@@ -72,14 +72,14 @@ public class ListResolver extends MethodPathResolver {
     }
     
     public ListResolver() {
-        methodpathList = new HashMap<String, List<ParsedEntry>>();
+        methodPathList = new HashMap<String, List<ParsedEntry>>();
     }
 
     public void route(String method, String path, Runnable runnable) {
-        List<ParsedEntry> pathList = methodpathList.get(method);
+        List<ParsedEntry> pathList = methodPathList.get(method);
         if(pathList == null) {
             pathList = new ArrayList<ParsedEntry>();
-            methodpathList.put(method, pathList);
+            methodPathList.put(method, pathList);
         }
         ParsedEntry parsed = new ParsedEntry(runnable, path);
         pathList.add(parsed);
@@ -91,7 +91,7 @@ public class ListResolver extends MethodPathResolver {
 
     @Override
     protected Runnable resolve(String method, String path) {
-        List<ParsedEntry> pathList = methodpathList.get(method);
+        List<ParsedEntry> pathList = methodPathList.get(method);
         if(pathList != null) {
             if(path != null) {
                 for(ParsedEntry parsedEntry: pathList) {
