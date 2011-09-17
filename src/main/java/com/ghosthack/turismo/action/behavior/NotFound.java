@@ -14,6 +14,6 @@ public class NotFound {
             Env.res().sendError(HttpServletResponse.SC_NOT_FOUND);
         } catch (IOException e) {
             throw new ActionException(e);
-        }        
+        }
     }
 }
