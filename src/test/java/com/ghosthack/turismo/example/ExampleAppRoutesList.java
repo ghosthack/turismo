@@ -1,10 +1,10 @@
 package com.ghosthack.turismo.example;
 
 import com.ghosthack.turismo.action.Action;
-import com.ghosthack.turismo.routes.RoutesMap;
+import com.ghosthack.turismo.routes.RoutesList;
 import com.ghosthack.turismo.servlet.Env;
 
-public class TestAppRoutes extends RoutesMap {
+public class ExampleAppRoutesList extends RoutesList {
 
     @Override
     protected void map() {
@@ -18,6 +18,14 @@ public class TestAppRoutes extends RoutesMap {
             @Override
             public void run() {
                 print("Hello World!");
+            }
+        });
+        get("/wild/*/card/:id", new Action() {
+            @Override
+            public void run() {
+                String id = params("id");
+                String id2 = params("id2");
+                print("id " + id + " id2 " + id2);
             }
         });
         get("/redir1", new Action() {
@@ -54,7 +62,7 @@ public class TestAppRoutes extends RoutesMap {
     }
 
     public static void main(String[] args) throws Exception{
-        JettyHelper.server(8080, "/*", TestAppRoutes.class.getName());
+        JettyHelper.server(8080, "/*", ExampleAppRoutesList.class.getName());
     }
 
 }

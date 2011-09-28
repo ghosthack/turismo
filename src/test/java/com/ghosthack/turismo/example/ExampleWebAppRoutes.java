@@ -1,10 +1,10 @@
 package com.ghosthack.turismo.example;
 
 import com.ghosthack.turismo.action.Action;
-import com.ghosthack.turismo.routes.RoutesList;
+import com.ghosthack.turismo.routes.RoutesMap;
 import com.ghosthack.turismo.servlet.Env;
 
-public class TestAppRoutesList extends RoutesList {
+public class ExampleWebAppRoutes extends RoutesMap {
 
     @Override
     protected void map() {
@@ -12,20 +12,6 @@ public class TestAppRoutesList extends RoutesList {
             @Override
             public void run() {
                 print("Hello World!");
-            }
-        });
-        get("", new Action() {
-            @Override
-            public void run() {
-                print("Hello World!");
-            }
-        });
-        get("/wild/*/card/:id", new Action() {
-            @Override
-            public void run() {
-                String id = params("id");
-                String id2 = params("id2");
-                print("id " + id + " id2 " + id2);
             }
         });
         get("/redir1", new Action() {
@@ -38,6 +24,7 @@ public class TestAppRoutesList extends RoutesList {
         get("/redir2", new Action() {
             @Override
             public void run() {
+                //302 redirect
                 redirect("/dest");
             }
         });
@@ -45,6 +32,12 @@ public class TestAppRoutesList extends RoutesList {
             @Override
             public void run() {
                 print("Hello Redirect");
+            }
+        });
+        get("/render", new Action() {
+            public void run() {
+                Env.req().setAttribute("message", "Hello Word!");
+                jsp("/jsp/render.jsp");
             }
         });
         post("/search", new Action() {
@@ -62,7 +55,7 @@ public class TestAppRoutesList extends RoutesList {
     }
 
     public static void main(String[] args) throws Exception{
-        JettyHelper.server(8080, "/*", TestAppRoutesList.class.getName());
+        JettyHelper.server(8080, JettyHelper.webapp());
     }
 
 }
