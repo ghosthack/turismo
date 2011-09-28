@@ -20,8 +20,8 @@ import com.ghosthack.turismo.util.ClassForName.ClassForNameException;
 /**
  * Action servlet.
  * <p>
- * Resolves a {@link IAction} based on the request, Each route executes an
- * {@link IAction}. On init configures the {@link Routes} {@link Resolver}.
+ * Resolves an action based on the request, Each route executes an
+ * action. On init configures the {@link Routes} {@link Resolver}.
  * 
  * <pre>
  * 	&lt;servlet&gt;
