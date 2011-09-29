@@ -56,12 +56,12 @@ public abstract class RoutesMap implements Routes {
         resolver.route(runnable);
     }
 
-    private static final String POST = "POST";
-    private static final String GET = "GET";
-    private static final String HEAD = "HEAD";
-    private static final String OPTIONS = "OPTIONS";
-    private static final String PUT = "PUT";
-    private static final String DELETE = "DELETE";
-    private static final String TRACE = "TRACE";
+    protected static final String POST = "POST";
+    protected static final String GET = "GET";
+    protected static final String HEAD = "HEAD";
+    protected static final String OPTIONS = "OPTIONS";
+    protected static final String PUT = "PUT";
+    protected static final String DELETE = "DELETE";
+    protected static final String TRACE = "TRACE";
 
 }
