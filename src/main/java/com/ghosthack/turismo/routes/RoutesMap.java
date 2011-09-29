@@ -7,7 +7,7 @@ import com.ghosthack.turismo.resolver.MapResolver;
 
 public abstract class RoutesMap implements Routes {
     
-    private final Resolver resolver;
+    protected final Resolver resolver;
     
     public RoutesMap() {
         resolver = new MapResolver();

@@ -55,7 +55,7 @@ public abstract class RoutesList implements Routes {
     protected void route(Runnable runnable) {
         resolver.route(runnable);
     }
-
+    
     String POST = "POST";
     String GET = "GET";
     String HEAD = "HEAD";
