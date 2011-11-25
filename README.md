@@ -113,7 +113,7 @@ Using a jsp:
             }
         });
 
-And the jsp contains:
+And the render.jsp contains:
 
         <%=request.getAttribute("message")%>
 
