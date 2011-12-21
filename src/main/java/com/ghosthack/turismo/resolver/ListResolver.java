@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2011 Adrian Fernandez
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at
+ * 
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
+
 package com.ghosthack.turismo.resolver;
 
 import java.util.ArrayList;
@@ -92,45 +108,43 @@ public class ListResolver extends MethodPathResolver {
     @Override
     protected Runnable resolve(String method, String path) {
         List<ParsedEntry> pathList = methodPathList.get(method);
-        if(pathList != null) {
-            if(path != null) {
-                for(ParsedEntry parsedEntry: pathList) {
-                    String[] parts = parsedEntry.getParts();
-                    if(parts == null) {
-                        if(parsedEntry.pathEquals(path)) {
-                            return parsedEntry.getRunnable();
+        if(pathList != null && path != null) {
+            for(ParsedEntry parsedEntry: pathList) {
+                String[] parts = parsedEntry.getParts();
+                if(parts == null) {
+                    if(parsedEntry.pathEquals(path)) {
+                        return parsedEntry.getRunnable();
+                    }
+                } else {
+                    String[] splitted = path.split("/");
+                    if(parts.length == splitted.length) {
+                        boolean match = true;
+                        boolean hasParams = false;
+                        for(int i = 0; i < splitted.length; i++) {
+                            if(parsedEntry.isWildcard(i)) {
+                                // skipped
+                            } else if(parsedEntry.isParam(i)) {
+                                // it's a resource "symbol"
+                                hasParams = true;
+                            } else if(parts[i].equals(splitted[i])) {
+                                // exact match
+                            } else {
+                                // not a match
+                                match = false;
+                                break;
+                            }
                         }
-                    } else {
-                        String[] splitted = path.split("/");
-                        if(parts.length == splitted.length) {
-                            boolean match = true;
-                            boolean hasParams = false;
-                            for(int i = 0; i < splitted.length; i++) {
-                                if(parsedEntry.isWildcard(i)) {
-                                    // skipped
-                                } else if(parsedEntry.isParam(i)) {
-                                    // it's a resource "symbol"
-                                    hasParams = true;
-                                } else if(parts[i].equals(splitted[i])) {
-                                    // exact match
-                                } else {
-                                    // not a match
-                                    match = false;
-                                    break;
+                        if(match) {
+                            if(hasParams) {
+                                Map<String, String> params = new HashMap<String, String>();
+                                for(Map.Entry<String, Integer> paramsEntry: parsedEntry.getParams()) {
+                                    String paramKey = paramsEntry.getKey();
+                                    Integer paramPos = paramsEntry.getValue();
+                                    params.put(paramKey, splitted[paramPos]);
                                 }
+                                Env.setResourceParams(params);
                             }
-                            if(match) {
-                                if(hasParams) {
-                                    Map<String, String> params = new HashMap<String, String>();
-                                    for(Map.Entry<String, Integer> paramsEntry: parsedEntry.getParams()) {
-                                        String paramKey = paramsEntry.getKey();
-                                        Integer paramPos = paramsEntry.getValue();
-                                        params.put(paramKey, splitted[paramPos]);
-                                    }
-                                    Env.setResourceParams(params);
-                                }
-                                return parsedEntry.getRunnable();
-                            }
+                            return parsedEntry.getRunnable();
                         }
                     }
                 }
