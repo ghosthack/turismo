@@ -59,8 +59,8 @@ public class Servlet extends HttpServlet {
     private static final String ROUTES = "routes";
     private static final long serialVersionUID = 1L;
     
-    private transient Routes routes;
-    private transient ServletContext context;
+    protected transient Routes routes;
+    protected transient ServletContext context;
 
     @Override
     public void service(HttpServletRequest req, HttpServletResponse res)
@@ -69,7 +69,6 @@ public class Servlet extends HttpServlet {
         try {
             final Runnable action = routes.getResolver().resolve();
             action.run();
-        
         } catch (ActionException e) {
             throw new ServletException(e);
         } finally {
