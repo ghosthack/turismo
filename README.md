@@ -142,6 +142,18 @@ The default route in RoutesMap/RoutesList sends a 404. Rewire with another actio
             }
         });
 
+Multipart
+---------
+
+        post("/image", new Action() {
+            void run() {
+                MultipartRequest request = MultipartFilter.wrapAndParse(req());
+                String[] meta = request.getParameterValues("image");
+                byte[] bytes = (byte[]) request.getAttribute("image");
+                LOG.info("type: %s, name: %s, %d bytes", meta[0], meta[1], bytes.length);
+            }
+        });
+
 
 Maven repository
 ----------------
