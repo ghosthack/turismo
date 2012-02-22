@@ -22,9 +22,9 @@ import com.ghosthack.turismo.action.NotFoundAction;
 import com.ghosthack.turismo.resolver.ListResolver;
 
 public abstract class RoutesList implements Routes {
-    
+
     private final Resolver resolver;
-    
+
     public RoutesList() {
         resolver = new ListResolver();
         resolver.route(new NotFoundAction());
@@ -35,8 +35,18 @@ public abstract class RoutesList implements Routes {
     public Resolver getResolver() {
         return resolver;
     }
-    
+
     protected abstract void map();
+
+    //route-alias shortcut methods
+
+    protected void post(final String fromPath, final String targetPath) {
+        resolver.route(POST, fromPath, targetPath);
+    }
+
+    protected void get(final String fromPath, final String targetPath) {
+        resolver.route(GET, fromPath, targetPath);
+    }
 
     // Shortcuts methods
 
@@ -71,7 +81,7 @@ public abstract class RoutesList implements Routes {
     protected void route(Runnable runnable) {
         resolver.route(runnable);
     }
-    
+
     String POST = "POST";
     String GET = "GET";
     String HEAD = "HEAD";
