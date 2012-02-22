@@ -23,6 +23,8 @@ public interface Resolver {
 
     void route(String method, String path, Runnable runnable);
 
+    void route(String method, String fromPath, String targetPath);
+
     void route(Runnable runnable);
 
 }

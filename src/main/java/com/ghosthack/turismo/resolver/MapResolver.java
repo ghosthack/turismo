@@ -73,4 +73,9 @@ public class MapResolver extends MethodPathResolver {
         methodMap.put(path, action);
     }
 
+    @Override
+    public void route(String method, String fromPath, String targetPath) {
+        throw new IllegalAccessError("Not implemented");
+    }
+
 }

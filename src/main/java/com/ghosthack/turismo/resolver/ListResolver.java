@@ -42,7 +42,7 @@ public class ListResolver extends MethodPathResolver {
         private Set<Entry<String, Integer>> params;
         public ParsedEntry(Runnable runnable, String path) {
             super();
-            if(runnable == null || path == null)
+            if(path == null)
                 throw new IllegalArgumentException();
             this.runnable = runnable;
             this.path = path;
@@ -85,12 +85,37 @@ public class ListResolver extends MethodPathResolver {
         public Runnable getRunnable() {
             return runnable;
         }
+        public String getPath() {
+            return path;
+        }
     }
     
     public ListResolver() {
         methodPathList = new HashMap<String, List<ParsedEntry>>();
     }
 
+    /** 
+     * The target path must exist. Target can't have a different parameter spec. A hashmap could be used to enhance impl.
+     * @param method
+     * @param newPath
+     * @param targetPath
+     * @throws IllegalArgumentException if the parameter HTTP method hasn't anything mapped, also, when the "target" path isn't found
+     */
+    @Override
+    public void route(String method, String newPath, String targetPath) {
+        List<ParsedEntry> pathList = methodPathList.get(method);
+        if(pathList == null) throw new IllegalArgumentException(method);
+        for(ParsedEntry parsedEntry: pathList) {
+            if(parsedEntry.getPath().equals(targetPath)) {
+                Runnable runnable = parsedEntry.getRunnable();
+                pathList.add(new ParsedEntry(runnable, newPath));
+                return;
+            }
+        }
+        throw new IllegalArgumentException(targetPath);
+    }
+
+    @Override
     public void route(String method, String path, Runnable runnable) {
         List<ParsedEntry> pathList = methodPathList.get(method);
         if(pathList == null) {
