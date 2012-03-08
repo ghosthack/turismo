@@ -25,6 +25,7 @@ Using wildcards and resource identifiers
                     print("wildcard id " + id);
                 }
             });
+            get("/alias/*/:id", "/wildcard/*/:id");
         }
     }
 
