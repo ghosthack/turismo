@@ -34,7 +34,7 @@ public final class MultipartParser {
      * @param charsetName
      *            the charset used to decode bytes as strings, can't be null.
      * @param size
-     *            the used to create the byte buffer.
+     *            the size used to create the byte buffer, usually request content-length.
      */
     public MultipartParser(final InputStream is, final String boundary,
             final Parametrizable parameters, final String charsetName,

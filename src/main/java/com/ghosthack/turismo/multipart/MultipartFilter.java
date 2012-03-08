@@ -1,7 +1,6 @@
 package com.ghosthack.turismo.multipart;
 
 import java.io.IOException;
-import java.io.InputStream;
 
 import javax.servlet.FilterChain;
 import javax.servlet.FilterConfig;
@@ -73,7 +72,7 @@ import javax.servlet.http.HttpServletRequest;
 public class MultipartFilter implements javax.servlet.Filter {
 
     private static final String CHARSET_NAME_PARAMETER = "charset-name";
-    private static String CHARSET_NAME = "ISO-8859-1";
+    public static String CHARSET_NAME = "ISO-8859-1";
 
     // private static final java.util.logging.Logger LOG =
     // java.util.logging.Logger.getLogger(Filter.class.getName());
@@ -90,7 +89,7 @@ public class MultipartFilter implements javax.servlet.Filter {
                 && contentType.startsWith(MultipartRequest.MULTIPART_FORM_DATA_BOUNDARY)) {
             final MultipartRequest multipartRequest;
             try {
-              multipartRequest = wrapAndParse((HttpServletRequest) request);
+              multipartRequest = MultipartRequest.wrapAndParse((HttpServletRequest) request);
             } catch (ParseException e) {
                 dump(request);
                 throw new ServletException(e);
@@ -100,25 +99,6 @@ public class MultipartFilter implements javax.servlet.Filter {
             chain.doFilter(request, response);
         }
 
-    }
-
-    public static MultipartRequest wrapAndParse(HttpServletRequest req) throws ParseException, IOException {
-        final MultipartRequest multipart = new MultipartRequest(req);
-        final String boundary = multipart.getBoundary();
-        final int size = req.getContentLength();
-        String encoding = req.getCharacterEncoding();
-        if(encoding == null) {
-            encoding = CHARSET_NAME;
-        }
-        InputStream is = null;
-        try {
-            is = req.getInputStream();
-            new MultipartParser(is, boundary, multipart, encoding, size).parse();
-        } finally {
-            if (is != null)
-                is.close();
-        }
-        return multipart;
     }
 
     private void dump(ServletRequest request) throws IOException {
