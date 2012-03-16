@@ -1,0 +1,34 @@
+apply plugin: "java"
+
+// More details: http://gradle.org/docs/current/userguide/maven_plugin.html
+apply plugin: "maven"
+
+group = "com.ghosthack"
+version = "1.1.4-SNAPSHOT"
+description = "turismo"
+
+sourceCompatibility = 1.6
+targetCompatibility = 1.6
+
+configurations.all {
+}
+
+repositories {
+  mavenCentral()
+}
+
+jetty = [ "group": "org.eclipse.jetty", "version": "7.4.5.v20110725" ]
+
+dependencies {
+  testCompile "junit:junit:4.4"
+  testCompile "org.mockito:mockito-core:1.9.0-rc1"
+  testCompile "${jetty.group}:jetty-servlet:${jetty.version}"
+  testCompile "${jetty.group}:jetty-jsp-2.1:${jetty.version}"
+  testCompile "${jetty.group}:jetty-webapp:${jetty.version}"
+  testCompile "org.apache.tomcat:jasper:6.0.33"
+
+  // should be provided by the container
+  compile("javax.servlet:servlet-api:2.5") {
+    provided : true
+  }
+}
