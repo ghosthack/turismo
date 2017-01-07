@@ -1,7 +1,7 @@
 turismo -- a sinatra-like Java web framework without sinatra goodness.
 ======================================================================
 
-[![Build Status](https://secure.travis-ci.org/ghosthack/turismo.png?branch=master)](http://travis-ci.org/ghosthack/turismo)
+[![Build Status](https://secure.travis-ci.org/ghosthack/turismo.png?branch=master)](http://travis-ci.org/ghosthack/turismo) [![Javadoc](https://javadoc-emblem.rhcloud.com/doc/com.ghosthack/turismo/badge.svg)](http://www.javadoc.io/doc/com.ghosthack/turismo)
 
 Quick intro
 -----------
