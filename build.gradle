@@ -17,7 +17,7 @@ repositories {
   mavenCentral()
 }
 
-jetty = [ "group": "org.eclipse.jetty", "version": "7.4.5.v20110725" ]
+def jetty = ["group": "org.eclipse.jetty", "version": "7.4.5.v20110725" ]
 
 dependencies {
   testCompile "junit:junit:4.4"
@@ -28,7 +28,5 @@ dependencies {
   testCompile "org.apache.tomcat:jasper:6.0.33"
 
   // should be provided by the container
-  compile("javax.servlet:servlet-api:2.5") {
-    provided : true
-  }
+  compileOnly("javax.servlet:servlet-api:2.5")
 }
