@@ -23,7 +23,7 @@ import com.ghosthack.turismo.resolver.ListResolver;
 
 public abstract class RoutesList implements Routes {
 
-    private final Resolver resolver;
+    protected final Resolver resolver;
 
     public RoutesList() {
         resolver = new ListResolver();
@@ -38,7 +38,7 @@ public abstract class RoutesList implements Routes {
 
     protected abstract void map();
 
-    //route-alias shortcut methods
+    // Route-alias shortcut methods
 
     protected void post(final String fromPath, final String targetPath) {
         resolver.route(POST, fromPath, targetPath);
@@ -46,6 +46,10 @@ public abstract class RoutesList implements Routes {
 
     protected void get(final String fromPath, final String targetPath) {
         resolver.route(GET, fromPath, targetPath);
+    }
+
+    protected void put(final String fromPath, final String targetPath) {
+        resolver.route(PUT, fromPath, targetPath);
     }
 
     // Shortcuts methods
@@ -82,12 +86,12 @@ public abstract class RoutesList implements Routes {
         resolver.route(runnable);
     }
 
-    String POST = "POST";
-    String GET = "GET";
-    String HEAD = "HEAD";
-    String OPTIONS = "OPTIONS";
-    String PUT = "PUT";
-    String DELETE = "DELETE";
-    String TRACE = "TRACE";
+    protected String POST = "POST";
+    protected String GET = "GET";
+    protected String HEAD = "HEAD";
+    protected String OPTIONS = "OPTIONS";
+    protected String PUT = "PUT";
+    protected String DELETE = "DELETE";
+    protected String TRACE = "TRACE";
 
 }

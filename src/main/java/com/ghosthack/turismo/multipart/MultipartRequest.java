@@ -2,6 +2,9 @@ package com.ghosthack.turismo.multipart;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletRequestWrapper;
+
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -82,6 +85,25 @@ public class MultipartRequest extends HttpServletRequestWrapper implements
      */
     public String getBoundary() {
         return boundary;
+    }
+
+    public static MultipartRequest wrapAndParse(HttpServletRequest req) throws ParseException, IOException {
+        final MultipartRequest multipart = new MultipartRequest(req);
+        final String boundary = multipart.getBoundary();
+        final int size = req.getContentLength();
+        String encoding = req.getCharacterEncoding();
+        if(encoding == null) {
+            encoding = MultipartFilter.CHARSET_NAME;
+        }
+        InputStream is = null;
+        try {
+            is = req.getInputStream();
+            new MultipartParser(is, boundary, multipart, encoding, size).parse();
+        } finally {
+            if (is != null)
+                is.close();
+        }
+        return multipart;
     }
 
 }
