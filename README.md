@@ -1,7 +1,7 @@
-turismo -- a sinatra-like Java web framework without sinatra goodness.
-======================================================================
+turismo -- a sinatra-like Java web framework.
+=============================================
 
-[![Build Status](https://secure.travis-ci.org/ghosthack/turismo.png?branch=master)](http://travis-ci.org/ghosthack/turismo) [![Javadoc](https://javadoc-emblem.rhcloud.com/doc/com.ghosthack/turismo/badge.svg)](http://www.javadoc.io/doc/com.ghosthack/turismo)
+[![Build Status](https://travis-ci.org/ghosthack/turismo.svg?branch=master)](https://travis-ci.org/ghosthack/turismo) [![Javadocs](https://javadoc.io/badge/com.ghosthack/turismo.svg)](https://javadoc.io/doc/com.ghosthack/turismo) [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.ghosthack/turismo/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.ghosthack/turismo)
 
 Quick intro
 -----------
