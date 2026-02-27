@@ -16,16 +16,30 @@
 
 package com.ghosthack.turismo.action;
 
+/**
+ * Runtime exception thrown when an action fails during execution.
+ */
 public class ActionException extends RuntimeException {
 
+    /** Creates a new exception with no detail. */
     public ActionException() {
         super();
     }
 
+    /**
+     * Creates a new exception with a message.
+     *
+     * @param msg the detail message
+     */
     public ActionException(String msg) {
         super(msg);
     }
 
+    /**
+     * Creates a new exception wrapping a cause.
+     *
+     * @param cause the underlying cause
+     */
     public ActionException(Throwable cause) {
         super(cause);
     }

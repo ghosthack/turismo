@@ -21,8 +21,20 @@ import java.io.IOException;
 import com.ghosthack.turismo.action.ActionException;
 import com.ghosthack.turismo.servlet.Env;
 
+/**
+ * Writes a string directly to the HTTP response output.
+ */
 public final class StringPrinter {
 
+    /** Creates a new StringPrinter. */
+    public StringPrinter() {
+    }
+
+    /**
+     * Writes the given string to the response writer.
+     *
+     * @param string the string to write
+     */
     public void print(String string) {
         try {
             Env.res().getWriter().write(string);

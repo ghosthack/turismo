@@ -23,8 +23,18 @@ import javax.servlet.http.HttpServletResponse;
 import com.ghosthack.turismo.action.ActionException;
 import com.ghosthack.turismo.servlet.Env;
 
+/**
+ * Sends an HTTP 404 (Not Found) error response.
+ */
 public class NotFound {
 
+    /** Creates a new NotFound instance. */
+    public NotFound() {
+    }
+
+    /**
+     * Sends a 404 error response.
+     */
     public void send404() {
         try {
             Env.res().sendError(HttpServletResponse.SC_NOT_FOUND);

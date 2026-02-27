@@ -56,10 +56,16 @@ import com.ghosthack.turismo.util.ClassForName.ClassForNameException;
  */
 public class Servlet extends HttpServlet {
 
+    /** Creates a new Servlet instance. */
+    public Servlet() {
+    }
+
     private static final String ROUTES = "routes";
     private static final long serialVersionUID = 1L;
-    
+
+    /** The configured routes instance. */
     protected transient Routes routes;
+    /** The servlet context obtained during initialization. */
     protected transient ServletContext context;
 
     @Override
@@ -68,6 +74,10 @@ public class Servlet extends HttpServlet {
         Env.create(req, res, context);
         try {
             final Runnable action = routes.getResolver().resolve();
+            if (action == null) {
+                res.sendError(HttpServletResponse.SC_NOT_FOUND);
+                return;
+            }
             action.run();
         } catch (ActionException e) {
             throw new ServletException(e);
@@ -78,7 +88,7 @@ public class Servlet extends HttpServlet {
 
     @Override
     public void init(ServletConfig config) throws ServletException {
-        super.init();
+        super.init(config);
         context = config.getServletContext();
         final String routesParam = config.getInitParameter(ROUTES);
         if (routesParam == null || routesParam.trim().isEmpty()) {

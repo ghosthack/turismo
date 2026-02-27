@@ -1,6 +1,6 @@
 package com.ghosthack.turismo.servlet;
 
-import static org.junit.Assert.fail;
+import static org.junit.Assert.assertNotNull;
 
 import javax.servlet.ServletConfig;
 import javax.servlet.ServletContext;
@@ -53,15 +53,9 @@ public class ServletTest {
         ServletContext context = Mockito.mock(ServletContext.class);
         when(config.getServletContext()).thenReturn(context);
         when(config.getInitParameter("routes"))
-                .thenReturn("com.ghosthack.turismo.routes.RoutesMapTest$TestRoutes");
+                .thenReturn("com.ghosthack.turismo.example.AppRoutes");
 
-        // Should not throw -- but TestRoutes doesn't exist in production.
-        // Let's use an example that exists
-        try {
-            servlet.init(config);
-            fail("Expected ServletException for non-existent class");
-        } catch (ServletException e) {
-            // expected -- the test class doesn't exist in the classpath
-        }
+        servlet.init(config);
+        assertNotNull(servlet.routes);
     }
 }

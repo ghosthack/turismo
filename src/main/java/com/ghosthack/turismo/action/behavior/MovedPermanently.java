@@ -20,8 +20,20 @@ import javax.servlet.http.HttpServletResponse;
 
 import com.ghosthack.turismo.servlet.Env;
 
+/**
+ * Sends an HTTP 301 (Moved Permanently) response with a Location header.
+ */
 public class MovedPermanently {
 
+    /** Creates a new MovedPermanently instance. */
+    public MovedPermanently() {
+    }
+
+    /**
+     * Sends a 301 response with the given location.
+     *
+     * @param location the new URL
+     */
     public void send301(String location) {
         Redirect.validateLocation(location);
         Env.res().setStatus(HttpServletResponse.SC_MOVED_PERMANENTLY);

@@ -24,6 +24,7 @@ import com.ghosthack.turismo.resolver.MapResolver;
  */
 public abstract class RoutesMap extends AbstractRoutes {
 
+    /** Creates a new map-based route container. */
     public RoutesMap() {
         super(new MapResolver());
     }

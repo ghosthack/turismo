@@ -20,9 +20,17 @@ import com.ghosthack.turismo.Resolver;
 import com.ghosthack.turismo.action.ActionException;
 import com.ghosthack.turismo.servlet.Env;
 
+/**
+ * Base resolver that extracts the HTTP method and request path from the
+ * current {@link Env} and delegates to {@link #resolve(String, String)}.
+ */
 public abstract class MethodPathResolver implements Resolver {
 
     private static final String UNDEFINED_PATH = "Undefined path";
+
+    /** Default constructor. */
+    protected MethodPathResolver() {
+    }
 
     @Override
     public Runnable resolve() throws ActionException {
@@ -32,6 +40,13 @@ public abstract class MethodPathResolver implements Resolver {
         return route;
     }
 
+    /**
+     * Resolves a route for the given HTTP method and path.
+     *
+     * @param method the HTTP method
+     * @param path   the request path
+     * @return the matching action, or {@code null}
+     */
     protected abstract Runnable resolve(String method, String path);
 
     private String extractPath() throws ActionException {

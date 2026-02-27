@@ -19,15 +19,28 @@ package com.ghosthack.turismo.resolver;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * A resolver that stores routes in a hash map for O(1) exact-match lookups.
+ * Does not support wildcard or parameterized paths.
+ */
 public class MapResolver extends MethodPathResolver {
 
+    /** Creates a new map-based resolver. */
+    public MapResolver() {
+    }
+
     /** 
-     * { method => { path => action-route } }
+     * { method =&gt; { path =&gt; action-route } }
      */
     private final Map<String, Map<String, Runnable>> methodPathMap = new HashMap<String, Map<String, Runnable>>();
 
     private Runnable notFoundRoute;
 
+    /**
+     * Returns the fallback route used when no match is found.
+     *
+     * @return the not-found route
+     */
     public Runnable getNotFoundRoute() {
         return notFoundRoute;
     }
@@ -46,10 +59,17 @@ public class MapResolver extends MethodPathResolver {
         notFoundRoute = runnable;
     }
 
+    /**
+     * Registers a method-agnostic route for the given path.
+     *
+     * @param path     the URL path
+     * @param runnable the action to execute
+     */
     public void route(final String path, Runnable runnable) {
         route(null, path, runnable);
     }
 
+    @Override
     public void route(final String method, final String path, Runnable runnable) {
         addRoute(method, path, runnable);
     }

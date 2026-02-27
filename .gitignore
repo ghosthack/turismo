@@ -1,5 +1,7 @@
 src/main/webapp/WEB-INF/classes/
 target/
+build/
+.gradle/
 .settings/
 .project
 *.DS_Store

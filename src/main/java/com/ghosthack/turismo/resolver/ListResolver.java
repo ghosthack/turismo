@@ -26,7 +26,10 @@ import java.util.Set;
 
 import com.ghosthack.turismo.servlet.Env;
 
-
+/**
+ * A resolver that stores routes in a list and supports wildcard ({@code *})
+ * and named parameter ({@code :param}) path segments.
+ */
 public class ListResolver extends MethodPathResolver {
     
     private HashMap<String, List<ParsedEntry>> methodPathList;
@@ -34,6 +37,10 @@ public class ListResolver extends MethodPathResolver {
     private static final String SYMBOL_PREFIX = ":";
     private static final String WILDCARD = "*";
     
+    /**
+     * A parsed route entry that pre-computes path segments, parameter
+     * indexes, and wildcard indexes for efficient matching.
+     */
     public static class ParsedEntry {
         private final Runnable runnable;
         private final String path;
@@ -42,6 +49,12 @@ public class ListResolver extends MethodPathResolver {
         private final Set<Integer> wildcardIndexes;
         private final Set<Entry<String, Integer>> params;
 
+        /**
+         * Creates a parsed entry for the given path.
+         *
+         * @param runnable the action to execute
+         * @param path     the URL path pattern
+         */
         public ParsedEntry(Runnable runnable, String path) {
             super();
             if (path == null)
@@ -70,54 +83,96 @@ public class ListResolver extends MethodPathResolver {
             }
         }
 
+        /**
+         * Returns whether the segment at index {@code i} is a named parameter.
+         *
+         * @param i the segment index
+         * @return {@code true} if the segment is a parameter
+         */
         public boolean isParam(int i) {
             if (paramIndexes == null)
                 return false;
             return paramIndexes.contains(i);
         }
 
+        /**
+         * Returns whether the segment at index {@code i} is a wildcard.
+         *
+         * @param i the segment index
+         * @return {@code true} if the segment is a wildcard
+         */
         public boolean isWildcard(int i) {
             if (wildcardIndexes == null)
                 return false;
             return wildcardIndexes.contains(i);
         }
 
+        /**
+         * Returns the named parameter entries (name to segment index).
+         *
+         * @return the parameter entries
+         */
         public Set<Entry<String, Integer>> getParams() {
             return params;
         }
 
+        /**
+         * Returns whether this entry's path equals the given path exactly.
+         *
+         * @param path the path to compare
+         * @return {@code true} if paths are equal
+         */
         public boolean pathEquals(String path) {
             return this.path.equals(path);
         }
 
+        /**
+         * Returns a copy of the path segments.
+         *
+         * @return the path segments array, or {@code null}
+         */
         public String[] getParts() {
-            return parts;
+            return parts != null ? parts.clone() : null;
         }
 
+        /**
+         * Returns the action for this route.
+         *
+         * @return the runnable action
+         */
         public Runnable getRunnable() {
             return runnable;
         }
 
+        /**
+         * Returns the original path pattern.
+         *
+         * @return the path
+         */
         public String getPath() {
             return path;
         }
     }
     
+    /** Creates a new list-based resolver. */
     public ListResolver() {
         methodPathList = new HashMap<String, List<ParsedEntry>>();
     }
 
     /** 
-     * The target path must exist. Target can't have a different parameter spec. A hashmap could be used to enhance impl.
-     * @param method
-     * @param newPath
-     * @param targetPath
-     * @throws IllegalArgumentException if the parameter HTTP method hasn't anything mapped, also, when the "target" path isn't found
+     * Creates an alias so that {@code newPath} resolves to the same action as {@code targetPath}.
+     * The target path must already be registered.
+     *
+     * @param method     the HTTP method
+     * @param newPath    the new path to register
+     * @param targetPath the existing path whose action should be reused
+     * @throws IllegalArgumentException if no routes exist for the method or the target path is not found
      */
     @Override
     public void route(String method, String newPath, String targetPath) {
         List<ParsedEntry> pathList = methodPathList.get(method);
-        if(pathList == null) throw new IllegalArgumentException(method);
+        if(pathList == null) throw new IllegalArgumentException(
+                "No routes registered for HTTP method '" + method + "'");
         for(ParsedEntry parsedEntry: pathList) {
             if(parsedEntry.getPath().equals(targetPath)) {
                 Runnable runnable = parsedEntry.getRunnable();
@@ -125,7 +180,8 @@ public class ListResolver extends MethodPathResolver {
                 return;
             }
         }
-        throw new IllegalArgumentException(targetPath);
+        throw new IllegalArgumentException(
+                "Target path '" + targetPath + "' not found in routes for method '" + method + "'");
     }
 
     @Override
@@ -139,6 +195,7 @@ public class ListResolver extends MethodPathResolver {
         pathList.add(parsed);
     }
 
+    @Override
     public void route(Runnable runnable) {
         this.defaultRunnable = runnable;
     }

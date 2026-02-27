@@ -17,51 +17,97 @@ import java.util.Map;
 public class MultipartRequest extends HttpServletRequestWrapper implements
         Parametrizable {
 
-    /** Multipart form data boundary key */
+    /** Multipart form data content type prefix */
+    public static final String MULTIPART_FORM_DATA = "multipart/form-data";
+
+    /** @deprecated Use {@link #MULTIPART_FORM_DATA} instead */
+    @Deprecated
     public static final String MULTIPART_FORM_DATA_BOUNDARY = "multipart/form-data; boundary=";
 
     private static final String BOUNDARY_HEAD = "--";
-    private static final int MULTIPART_SIZE = MULTIPART_FORM_DATA_BOUNDARY
-            .length();
 
     private final Map<String, String[]> parameterMap = new HashMap<String, String[]>();
     private String boundary;
 
-    /** @see HttpServletRequestWrapper#HttpServletRequestWrapper(HttpServletRequest) */
+    /**
+     * Creates a new multipart request wrapper, extracting the boundary from the Content-Type header.
+     *
+     * @param servletRequest the original HTTP request
+     */
     public MultipartRequest(HttpServletRequest servletRequest) {
         super(servletRequest);
         final String contentType = getContentType();
-        if (contentType != null && contentType.length() > MULTIPART_SIZE) {
-            boundary = BOUNDARY_HEAD + contentType.substring(MULTIPART_SIZE);
+        if (contentType != null) {
+            boundary = extractBoundary(contentType);
         }
     }
 
     /**
+     * Extracts the boundary parameter from a Content-Type header value.
+     * Handles quoted values and arbitrary parameter ordering per RFC 2046.
+     *
+     * @param contentType the Content-Type header value
+     * @return the boundary (prefixed with "--"), or null if not found
+     */
+    static String extractBoundary(String contentType) {
+        if (contentType == null) {
+            return null;
+        }
+        // Must be multipart/form-data
+        String lower = contentType.toLowerCase(java.util.Locale.US);
+        if (!lower.startsWith(MULTIPART_FORM_DATA)) {
+            return null;
+        }
+        // Parse parameters after the media type
+        String rest = contentType.substring(MULTIPART_FORM_DATA.length());
+        String[] parts = rest.split(";");
+        for (String part : parts) {
+            String trimmed = part.trim();
+            if (trimmed.toLowerCase(java.util.Locale.US).startsWith("boundary=")) {
+                String value = trimmed.substring("boundary=".length()).trim();
+                // Remove quotes if present
+                if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
+                    value = value.substring(1, value.length() - 1);
+                }
+                if (value.isEmpty()) {
+                    return null;
+                }
+                return BOUNDARY_HEAD + value;
+            }
+        }
+        return null;
+    }
+
+    /**
      * @see javax.servlet.ServletRequest#getParameterMap()
-     * @return Map
+     * @return an unmodifiable view of the parameter map
      */
     @Override
     public Map<String, String[]> getParameterMap() {
-        return parameterMap;
+        return Collections.unmodifiableMap(parameterMap);
     }
 
     /** @see javax.servlet.ServletRequest#getParameter(java.lang.String) */
+    @Override
     public String getParameter(String name) {
         final String[] values = getParameterValues(name);
         return (values == null) ? null : values[0];
     }
 
     /** @see javax.servlet.ServletRequest#getParameterNames() */
+    @Override
     public Enumeration<String> getParameterNames() {
         return Collections.enumeration(parameterMap.keySet());
     }
 
     /** @see javax.servlet.ServletRequest#getParameterValues(java.lang.String) */
+    @Override
     public String[] getParameterValues(String name) {
         return parameterMap.get(name);
     }
 
     /** @see Parametrizable#addParameter(String, String) */
+    @Override
     public void addParameter(String name, String value) {
         String[] prev = parameterMap.put(name, new String[] { value });
         if (prev != null) {
@@ -75,6 +121,7 @@ public class MultipartRequest extends HttpServletRequestWrapper implements
     }
 
     /** @see Parametrizable#addParameter(String, String[]) */
+    @Override
     public void addParameter(String name, String[] value) {
         parameterMap.put(name, value);
     }
@@ -121,13 +168,11 @@ public class MultipartRequest extends HttpServletRequestWrapper implements
         if (encoding == null) {
             encoding = defaultCharset;
         }
-        InputStream is = null;
+        InputStream is = req.getInputStream();
         try {
-            is = req.getInputStream();
             new MultipartParser(is, boundary, multipart, encoding, size).parse();
         } finally {
-            if (is != null)
-                is.close();
+            is.close();
         }
         return multipart;
     }

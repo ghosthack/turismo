@@ -11,65 +11,60 @@ import javax.servlet.http.HttpServletRequest;
 
 /**
  * Parses submitted multipart form data and creates a new request object.
- * <p>
- * If you have a custom Request object added to the filter chain, this filter
- * should be the first.
- * </p>
- * <p>
- * The file parameter data is added as a byte array attribute with the same
- * parameter name. <blockquote> Example:
- * 
+ *
+ * <p>If you have a custom Request object added to the filter chain, this filter
+ * should be the first.</p>
+ *
+ * <p>The file parameter data is added as a byte array attribute with the same
+ * parameter name.</p>
+ *
+ * <blockquote>Example:
  * <pre>
- *      &lt;input type="file" name="imageFile"/>
+ *      &lt;input type="file" name="imageFile"/&gt;
  * </pre>
- * 
- * File contents are be obtained via:
- * 
+ *
+ * File contents are obtained via:
  * <pre>
- * <code>byte[] imageFileBytes = request.getAttribute("imageFile");</code>
+ * byte[] imageFileBytes = (byte[]) request.getAttribute("imageFile");
  * </pre>
- * 
- * for later manipulation. </blockquote>
- * 
- * The file-name and content-type data sent by the browser are stored as a
- * String array in the request object. <blockquote> Example:
- * 
+ * for later manipulation.</blockquote>
+ *
+ * <p>The file-name and content-type data sent by the browser are stored as a
+ * String array in the request object.</p>
+ *
+ * <blockquote>Example:
  * <pre>
- *      &lt;input type="file" name="imageFile"/>
+ *      &lt;input type="file" name="imageFile"/&gt;
  * </pre>
- * 
+ *
  * File name and content type are obtained like this:
- * 
  * <pre>
- * <code>String contentType = request.getParameter("imageFile")[0];</code>
- * <code>String fileName = request.getParameter("imageFile")[1];</code>
+ * String contentType = request.getParameterValues("imageFile")[0];
+ * String fileName = request.getParameterValues("imageFile")[1];
  * </pre>
- * 
  * </blockquote>
- * 
- * </p>
- * <p>
- * Configuration details:
- * 
+ *
+ * <p>Configuration details:</p>
  * <pre>
- *  &lt;filter>
- *      &lt;filter-name>multipart-filter&lt;/filter-name>
- *      &lt;filter-class>multipart.Filter&lt;/filter-class>
- *      &lt;init-param>
- *          &lt;param-name>charset-name&lt;/param-name>
- *          &lt;param-value>ISO-8859-1&lt;/param-value>
- *      &lt;/init-param>
- *  &lt;/filter>
- *  &lt;filter-mapping>
- *      &lt;filter-name>multipart-filter&lt;/filter-name>
- *      &lt;url-pattern>/eon/*&lt;/url-pattern>
- *  &lt;/filter-mapping>
+ *  &lt;filter&gt;
+ *      &lt;filter-name&gt;multipart-filter&lt;/filter-name&gt;
+ *      &lt;filter-class&gt;multipart.Filter&lt;/filter-class&gt;
+ *      &lt;init-param&gt;
+ *          &lt;param-name&gt;charset-name&lt;/param-name&gt;
+ *          &lt;param-value&gt;ISO-8859-1&lt;/param-value&gt;
+ *      &lt;/init-param&gt;
+ *  &lt;/filter&gt;
+ *  &lt;filter-mapping&gt;
+ *      &lt;filter-name&gt;multipart-filter&lt;/filter-name&gt;
+ *      &lt;url-pattern&gt;/eon/*&lt;/url-pattern&gt;
+ *  &lt;/filter-mapping&gt;
  * </pre>
- * 
- * </p>
- * 
  */
 public class MultipartFilter implements javax.servlet.Filter {
+
+    /** Creates a new MultipartFilter with the default charset. */
+    public MultipartFilter() {
+    }
 
     private static final String CHARSET_NAME_PARAMETER = "charset-name";
     private static final String DEFAULT_CHARSET_NAME = "ISO-8859-1";
@@ -80,12 +75,13 @@ public class MultipartFilter implements javax.servlet.Filter {
      * @see javax.servlet.Filter#doFilter(javax.servlet.ServletRequest,
      *      javax.servlet.ServletResponse, javax.servlet.FilterChain)
      */
+    @Override
     public void doFilter(ServletRequest request, ServletResponse response,
             FilterChain chain) throws ServletException, IOException {
 
         final String contentType = request.getContentType();
         if (contentType != null
-                && contentType.startsWith(MultipartRequest.MULTIPART_FORM_DATA_BOUNDARY)) {
+                && contentType.toLowerCase(java.util.Locale.US).startsWith(MultipartRequest.MULTIPART_FORM_DATA)) {
             final MultipartRequest multipartRequest;
             try {
               multipartRequest = MultipartRequest.wrapAndParse(
@@ -103,6 +99,7 @@ public class MultipartFilter implements javax.servlet.Filter {
     /**
      * @see javax.servlet.Filter#init(javax.servlet.FilterConfig)
      */
+    @Override
     public void init(FilterConfig config) throws ServletException {
         final String configCharset = config
                 .getInitParameter(CHARSET_NAME_PARAMETER);
@@ -132,6 +129,7 @@ public class MultipartFilter implements javax.servlet.Filter {
     /**
      * @see javax.servlet.Filter#destroy()
      */
+    @Override
     public void destroy() {
         // nothing today
     }

@@ -20,8 +20,20 @@ import javax.servlet.http.HttpServletResponse;
 
 import com.ghosthack.turismo.servlet.Env;
 
+/**
+ * Sends an HTTP 302 (Moved Temporarily) response with a Location header.
+ */
 public class MovedTemporarily {
 
+    /** Creates a new MovedTemporarily instance. */
+    public MovedTemporarily() {
+    }
+
+    /**
+     * Sends a 302 response with the given location.
+     *
+     * @param location the new URL
+     */
     public void send302(String location) {
         Redirect.validateLocation(location);
         Env.res().setStatus(HttpServletResponse.SC_MOVED_TEMPORARILY);

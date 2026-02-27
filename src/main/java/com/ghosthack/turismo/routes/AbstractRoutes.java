@@ -28,18 +28,32 @@ import com.ghosthack.turismo.action.NotFoundAction;
  */
 public abstract class AbstractRoutes implements Routes {
 
+    /** HTTP GET method. */
     protected static final String GET = "GET";
+    /** HTTP POST method. */
     protected static final String POST = "POST";
+    /** HTTP PUT method. */
     protected static final String PUT = "PUT";
+    /** HTTP DELETE method. */
     protected static final String DELETE = "DELETE";
+    /** HTTP HEAD method. */
     protected static final String HEAD = "HEAD";
+    /** HTTP OPTIONS method. */
     protected static final String OPTIONS = "OPTIONS";
+    /** HTTP TRACE method. */
     protected static final String TRACE = "TRACE";
+    /** HTTP PATCH method. */
     protected static final String PATCH = "PATCH";
 
+    /** The resolver that stores all route mappings. */
     protected final Resolver resolver;
     private volatile boolean initialized = false;
 
+    /**
+     * Creates a new route container backed by the given resolver.
+     *
+     * @param resolver the resolver to store routes in
+     */
     protected AbstractRoutes(Resolver resolver) {
         this.resolver = resolver;
         this.resolver.route(new NotFoundAction());
@@ -70,40 +84,91 @@ public abstract class AbstractRoutes implements Routes {
      */
     protected abstract void map();
 
-    // HTTP method shortcut methods
-
+    /**
+     * Registers a GET route.
+     *
+     * @param path     the URL path pattern
+     * @param runnable the action to execute
+     */
     protected void get(final String path, Runnable runnable) {
         resolver.route(GET, path, runnable);
     }
 
+    /**
+     * Registers a POST route.
+     *
+     * @param path     the URL path pattern
+     * @param runnable the action to execute
+     */
     protected void post(final String path, Runnable runnable) {
         resolver.route(POST, path, runnable);
     }
 
+    /**
+     * Registers a PUT route.
+     *
+     * @param path     the URL path pattern
+     * @param runnable the action to execute
+     */
     protected void put(final String path, Runnable runnable) {
         resolver.route(PUT, path, runnable);
     }
 
+    /**
+     * Registers a DELETE route.
+     *
+     * @param path     the URL path pattern
+     * @param runnable the action to execute
+     */
     protected void delete(final String path, Runnable runnable) {
         resolver.route(DELETE, path, runnable);
     }
 
+    /**
+     * Registers a HEAD route.
+     *
+     * @param path     the URL path pattern
+     * @param runnable the action to execute
+     */
     protected void head(final String path, Runnable runnable) {
         resolver.route(HEAD, path, runnable);
     }
 
+    /**
+     * Registers an OPTIONS route.
+     *
+     * @param path     the URL path pattern
+     * @param runnable the action to execute
+     */
     protected void options(final String path, Runnable runnable) {
         resolver.route(OPTIONS, path, runnable);
     }
 
+    /**
+     * Registers a TRACE route.
+     *
+     * @param path     the URL path pattern
+     * @param runnable the action to execute
+     */
     protected void trace(final String path, Runnable runnable) {
         resolver.route(TRACE, path, runnable);
     }
 
+    /**
+     * Registers a PATCH route.
+     *
+     * @param path     the URL path pattern
+     * @param runnable the action to execute
+     */
     protected void patch(final String path, Runnable runnable) {
         resolver.route(PATCH, path, runnable);
     }
 
+    /**
+     * Registers the default (fallback) route.
+     *
+     * @param runnable the action to execute when no route matches
+     */
     protected void route(Runnable runnable) {
         resolver.route(runnable);
     }

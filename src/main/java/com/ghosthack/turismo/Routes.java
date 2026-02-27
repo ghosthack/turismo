@@ -16,9 +16,16 @@
 
 package com.ghosthack.turismo;
 
-
+/**
+ * A container of route definitions that provides a {@link Resolver}.
+ */
 public interface Routes {
 
+    /**
+     * Returns the resolver containing all registered routes.
+     *
+     * @return the route resolver
+     */
     Resolver getResolver();
 
 }

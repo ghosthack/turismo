@@ -25,9 +25,21 @@ import javax.servlet.ServletException;
 import com.ghosthack.turismo.action.ActionException;
 import com.ghosthack.turismo.servlet.Env;
 
-
+/**
+ * Forwards the current request to another resource via {@link RequestDispatcher}.
+ */
 public class Alias {
 
+    /** Creates a new Alias instance. */
+    public Alias() {
+    }
+
+    /**
+     * Forwards the request to the given target path.
+     *
+     * @param target the path to forward to
+     * @throws ActionException if the context or dispatcher is unavailable, or forwarding fails
+     */
     public void forward(final String target) {
         final ServletContext ctx = Env.ctx();
         if (ctx == null) {

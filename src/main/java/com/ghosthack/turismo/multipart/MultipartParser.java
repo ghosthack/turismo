@@ -6,6 +6,7 @@ package com.ghosthack.turismo.multipart;
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
@@ -23,6 +24,8 @@ public final class MultipartParser {
 
     /** Default maximum content size: 10 MB */
     public static final int DEFAULT_MAX_CONTENT_SIZE = 10 * 1024 * 1024;
+
+    private static final Charset US_ASCII = Charset.forName("US-ASCII");
 
     private static volatile int maxContentSize = DEFAULT_MAX_CONTENT_SIZE;
 
@@ -75,8 +78,8 @@ public final class MultipartParser {
         this.is = new BufferedInputStream(is, BUFFER_SIZE);
         this.parameters = parameters;
         charsetDecoder = Charset.forName(charsetName).newDecoder();
-        boundarySize = boundary.getBytes().length;
-        separator = (LINE_STRING + boundary).getBytes();
+        boundarySize = boundary.getBytes(US_ASCII).length;
+        separator = (LINE_STRING + boundary).getBytes(US_ASCII);
         buffer = new byte[separator.length + OFFSET];
         bb = ByteBuffer.allocate(size);
     }
@@ -111,7 +114,7 @@ public final class MultipartParser {
 
             skip(LINE_SIZE);
             readUntil(separator);
-            read(eval);
+            readFully(eval);
 
             if (isFile) {
                 parameters.setAttribute(name, bytes());
@@ -126,6 +129,7 @@ public final class MultipartParser {
     }
 
     private String decode() throws CharacterCodingException {
+        charsetDecoder.reset();
         return charsetDecoder.decode(bb).toString();
     }
 
@@ -137,18 +141,39 @@ public final class MultipartParser {
 
     private void read() throws ParseException, IOException {
         if ((bi = is.read()) == END_OF_STREAM)
-            throw new ParseException();
+            throw new ParseException("Unexpected end of stream while reading next byte");
         b = (byte) bi;
     }
 
-    private void read(final byte[] bytes) throws ParseException, IOException {
-        if (is.read(bytes) == END_OF_STREAM)
-            throw new ParseException();
+    private void readFully(final byte[] bytes) throws ParseException, IOException {
+        int offset = 0;
+        int remaining = bytes.length;
+        while (remaining > 0) {
+            int read = is.read(bytes, offset, remaining);
+            if (read == END_OF_STREAM)
+                throw new ParseException(
+                        "Unexpected end of stream: expected " + bytes.length
+                        + " bytes but only read " + offset);
+            offset += read;
+            remaining -= read;
+        }
     }
 
     private void skip(final long n) throws ParseException, IOException {
-        if (n != is.skip(n))
-            throw new ParseException();
+        long remaining = n;
+        while (remaining > 0) {
+            long skipped = is.skip(remaining);
+            if (skipped == 0) {
+                // skip(0) may mean EOF or no progress; try a single read to distinguish
+                if (is.read() == END_OF_STREAM)
+                    throw new ParseException(
+                            "Unexpected end of stream: needed to skip " + n
+                            + " bytes but could only skip " + (n - remaining));
+                remaining--;
+            } else {
+                remaining -= skipped;
+            }
+        }
     }
 
     /**
@@ -159,18 +184,22 @@ public final class MultipartParser {
         boolean coincidenceComplete = false;
         int coincidence = 0;
         bb.clear();
-        while (!coincidenceComplete) {
-            read();
-            if (coincidence > 0 && b != limit[coincidence]) {
-                bb.put(buffer, 0, coincidence);
-                coincidence = 0;
+        try {
+            while (!coincidenceComplete) {
+                read();
+                if (coincidence > 0 && b != limit[coincidence]) {
+                    bb.put(buffer, 0, coincidence);
+                    coincidence = 0;
+                }
+                if (b == limit[coincidence]) {
+                    buffer[coincidence] = b;
+                    coincidenceComplete = (++coincidence == limit.length);
+                } else {
+                    bb.put(b);
+                }
             }
-            if (b == limit[coincidence]) {
-                buffer[coincidence] = b;
-                coincidenceComplete = (++coincidence == limit.length);
-            } else {
-                bb.put(b);
-            }
+        } catch (BufferOverflowException e) {
+            throw new ParseException("Multipart field value exceeds buffer capacity");
         }
         bb.flip();
     }
@@ -209,15 +238,15 @@ public final class MultipartParser {
     }
 
     private static final String LINE_STRING = "\r\n";
-    private static final byte[] LINE = LINE_STRING.getBytes();
+    private static final byte[] LINE = LINE_STRING.getBytes(US_ASCII);
     private static final int LINE_SIZE = LINE.length;
     private static final int CONTENT_TYPE_SIZE = LINE_SIZE
-            + "Content-Type: ".getBytes().length;
+            + "Content-Type: ".getBytes(US_ASCII).length;
     private static final int CONTENT_DISPOSITION_SIZE = LINE_SIZE
-            + "Content-Disposition: form-data; name=\"".getBytes().length;
+            + "Content-Disposition: form-data; name=\"".getBytes(US_ASCII).length;
     private static final int BUFFER_SIZE = 10 * 1024;
-    private static final byte[] QUOTE = "\"".getBytes();
-    private static final byte[] END = "--".getBytes();
+    private static final byte[] QUOTE = "\"".getBytes(US_ASCII);
+    private static final byte[] END = "--".getBytes(US_ASCII);
     private static final int END_SIZE = END.length;
     private static final int CONTENT_DISPOSITION_2_SIZE = CONTENT_DISPOSITION_SIZE
             - END_SIZE;

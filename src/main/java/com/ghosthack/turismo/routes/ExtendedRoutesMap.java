@@ -18,8 +18,22 @@ package com.ghosthack.turismo.routes;
 
 import com.ghosthack.turismo.action.Action;
 
+/**
+ * A {@link RoutesMap} extension that supports alias-style GET routes
+ * where a path is forwarded to another resource via {@link Action#alias}.
+ */
 public abstract class ExtendedRoutesMap extends RoutesMap {
-    
+
+    /** Default constructor. */
+    protected ExtendedRoutesMap() {
+    }
+
+    /**
+     * Registers a GET route that forwards to the given target path.
+     *
+     * @param path   the URL path pattern
+     * @param target the path to forward to
+     */
     protected void get(String path, final String target) {
         resolver.route(GET, path, new Action() {
             @Override public void run() {

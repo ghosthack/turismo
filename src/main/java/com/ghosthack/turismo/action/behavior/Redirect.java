@@ -21,8 +21,20 @@ import java.io.IOException;
 import com.ghosthack.turismo.action.ActionException;
 import com.ghosthack.turismo.servlet.Env;
 
+/**
+ * Sends an HTTP redirect response via {@link javax.servlet.http.HttpServletResponse#sendRedirect}.
+ */
 public class Redirect {
 
+    /** Creates a new Redirect instance. */
+    public Redirect() {
+    }
+
+    /**
+     * Sends a redirect to the given location.
+     *
+     * @param location the redirect URL
+     */
     public void redirect(String location) {
         validateLocation(location);
         try {

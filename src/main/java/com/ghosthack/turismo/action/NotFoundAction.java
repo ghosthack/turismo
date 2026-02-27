@@ -16,7 +16,14 @@
 
 package com.ghosthack.turismo.action;
 
+/**
+ * Default action that sends an HTTP 404 response.
+ */
 public class NotFoundAction extends Action {
+
+    /** Creates a new NotFoundAction. */
+    public NotFoundAction() {
+    }
 
     @Override
     public void run() {
