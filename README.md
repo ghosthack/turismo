@@ -248,7 +248,7 @@ public class Main {
 
 ## Releasing
 
-1. Set the release version in `pom.xml` and `build.gradle` (remove `-SNAPSHOT`)
+1. Set the release version in `pom.xml` (remove `-SNAPSHOT`)
 2. Commit, push, and merge via PR
 3. CI detects the version change and creates a GitHub release automatically
 4. The release workflow deploys to Maven Central
