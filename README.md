@@ -1,14 +1,41 @@
-turismo -- a sinatra-like Java web framework.
-=============================================
+# turismo
 
-[![CI](https://github.com/ghosthack/turismo/actions/workflows/ci.yml/badge.svg)](https://github.com/ghosthack/turismo/actions/workflows/ci.yml) [![Javadocs](https://javadoc.io/badge/com.ghosthack/turismo.svg)](https://javadoc.io/doc/com.ghosthack/turismo) [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.ghosthack/turismo/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.ghosthack/turismo)
+A Sinatra-like Java web framework built on the Servlet API.
 
-Quick intro
------------
+[![CI](https://github.com/ghosthack/turismo/actions/workflows/ci.yml/badge.svg)](https://github.com/ghosthack/turismo/actions/workflows/ci.yml) [![Javadocs](https://javadoc.io/badge/io.github.ghosthack/turismo.svg)](https://javadoc.io/doc/io.github.ghosthack/turismo) [![Maven Central](https://img.shields.io/maven-central/v/io.github.ghosthack/turismo)](https://central.sonatype.com/artifact/io.github.ghosthack/turismo)
+
+## Maven
+
+```xml
+<dependency>
+    <groupId>io.github.ghosthack</groupId>
+    <artifactId>turismo</artifactId>
+    <version>2.0.0</version>
+</dependency>
+```
+
+Gradle:
+
+```groovy
+implementation 'io.github.ghosthack:turismo:2.0.0'
+```
+
+Requires Java 11+.
+
+> **Note:** Versions 1.x were published under `com.ghosthack:turismo`. The groupId changed to
+> `io.github.ghosthack` starting with 2.0.0.
+
+## Quick start
+
 ```java
-public class AppRoutes extends RoutesList {
+import io.github.ghosthack.turismo.action.Action;
+import io.github.ghosthack.turismo.routes.RoutesMap;
+
+public class AppRoutes extends RoutesMap {
+    @Override
     protected void map() {
         get("/", new Action() {
+            @Override
             public void run() {
                 print("Hello World!");
             }
@@ -17,172 +44,208 @@ public class AppRoutes extends RoutesList {
 }
 ```
 
-Using wildcards and resource identifiers
-----------------------------------------
+## Route types
+
+### RoutesMap — exact match (O(1) lookup)
 
 ```java
-public class AppRoutes extends RoutesList {
+public class AppRoutes extends RoutesMap {
+    @Override
     protected void map() {
-        get("/wildcard/*/:id", new Action() {
+        get("/hello", new Action() {
+            @Override
+            public void run() {
+                print("Hello!");
+            }
+        });
+    }
+}
+```
+
+### RoutesList — wildcards and named parameters
+
+```java
+import io.github.ghosthack.turismo.routes.RoutesList;
+
+public class AppRoutes extends RoutesList {
+    @Override
+    protected void map() {
+        get("/users/:id", new Action() {
+            @Override
             public void run() {
                 String id = params("id");
-                print("wildcard id " + id);
+                print("User " + id);
             }
         });
-        get("/alias/*/:id", "/wildcard/*/:id");
-    }
-}
-```
 
-Testing with standalone jetty
------------------------------
-
-```java
-package com.ghosthack.turismo.example;
-
-import com.ghosthack.turismo.action.*;
-import com.ghosthack.turismo.routes.*;
-
-public class AppRoutes extends RoutesList {
-
-    @Override
-    protected void map() {
-        get("/", new Action() {
+        // Wildcards match any segment
+        get("/files/*/download", new Action() {
             @Override
             public void run() {
-                print("Hello World!");
+                print("Downloading file");
             }
         });
-    }
 
-    public static void main(String[] args) throws Exception{
-        JettyHelper.server(8080, "/*", AppRoutes.class.getName());
+        // Route aliases
+        get("/u/:id", "/users/:id");
     }
-
 }
 ```
 
-Getting started, as webapp
---------------------------
+## HTTP methods
 
-Using a webapp descriptor: `web.xml`
-
-```xml
-<?xml version="1.0" encoding="utf-8"?>
-<web-app xmlns="http://java.sun.com/xml/ns/javaee" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd"
-  version="2.5">
-
-  <servlet>
-    <servlet-name>webapp-servlet</servlet-name>
-    <servlet-class>com.ghosthack.turismo.servlet.Servlet</servlet-class>
-    <init-param>
-      <param-name>routes</param-name>
-      <param-value>com.ghosthack.turismo.example.WebAppRoutes</param-value>
-    </init-param>
-  </servlet>
-  <servlet-mapping>
-    <servlet-name>webapp-servlet</servlet-name>
-    <url-pattern>/*</url-pattern>
-  </servlet-mapping>
-
-</web-app>
-```
-
-Implementing routes
-
-```java
-package com.ghosthack.turismo.example;
-
-import com.ghosthack.turismo.action.*;
-import com.ghosthack.turismo.routes.*;
-
-public class WebAppRoutes extends RoutesList {
-
-    @Override
-    protected void map() {
-        get("/", new Action() {
-            @Override
-            public void run() {
-                print("Hello World!");
-            }
-        });
-    }
-
-}
-```
-
-Rendering "templates"
----------------------
-
-Using a jsp: 
-
-```java
-get("/render", new Action() {
-    public void run() {
-        req().setAttribute("message", "Hello Word!");
-        jsp("/jsp/render.jsp");
-    }
-});
-```
-
-And the `render.jsp` contains:
-
-```xml
-<%=request.getAttribute("message")%>
-```
-
-Other mappings
---------------
-
-Methods for GET, POST, PUT, DELETE, HEAD, OPTIONS, TRACE
+All standard methods are supported: `get`, `post`, `put`, `delete`, `head`, `options`, `trace`, `patch`.
 
 ```java
 post("/search", new Action() {
+    @Override
     public void run() {
         String query = req().getParameter("q");
-        print("Your search query was: " + query)
+        print("Search: " + query);
+    }
+});
+
+delete("/users/:id", new Action() {
+    @Override
+    public void run() {
+        String id = params("id");
+        print("Deleted user " + id);
     }
 });
 ```
 
-The default route in RoutesMap/RoutesList sends a 404. Rewire with another action:
+## Redirects
+
+```java
+get("/old-page", new Action() {
+    @Override
+    public void run() {
+        movedPermanently("/new-page"); // 301
+    }
+});
+
+get("/temp", new Action() {
+    @Override
+    public void run() {
+        redirect("/destination"); // 302 via sendRedirect
+    }
+});
+```
+
+## JSP rendering
+
+```java
+get("/render", new Action() {
+    @Override
+    public void run() {
+        req().setAttribute("message", "Hello World!");
+        jsp("/WEB-INF/views/render.jsp");
+    }
+});
+```
+
+`render.jsp`:
+
+```jsp
+<%= request.getAttribute("message") %>
+```
+
+## Custom default route
+
+The default route sends a 404. Override it:
 
 ```java
 route(new Action() {
+    @Override
+    public void run() {
+        res().setStatus(404);
+        print("Nothing here.");
+    }
+});
+```
+
+## Multipart file uploads
+
+```java
+import io.github.ghosthack.turismo.multipart.MultipartRequest;
+
+post("/upload", new Action() {
+    @Override
     public void run() {
         try {
-            res().sendError(404, "Not Found");
-        } catch (IOException e) {
+            MultipartRequest multipart = MultipartRequest.wrapAndParse(req());
+            String[] meta = multipart.getParameterValues("image");
+            String contentType = meta[0];
+            String fileName = meta[1];
+            byte[] bytes = (byte[]) multipart.getAttribute("image");
+            print("Uploaded " + fileName + " (" + bytes.length + " bytes)");
+        } catch (Exception e) {
             throw new ActionException(e);
         }
     }
 });
 ```
 
-Multipart
----------
-
-```java
-post("/image", new Action() {
-    void run() {
-        MultipartRequest request = MultipartFilter.wrapAndParse(req());
-        String[] meta = request.getParameterValues("image");
-        byte[] bytes = (byte[]) request.getAttribute("image");
-        LOG.info("type: %s, name: %s, %d bytes", meta[0], meta[1], bytes.length);
-    }
-});
-```
-
-
-Maven repository
-----------------
+Or use `MultipartFilter` in `web.xml` to handle parsing automatically:
 
 ```xml
-<dependency>
-    <groupId>com.ghosthack</groupId>
-    <artifactId>turismo</artifactId>
-    <version>1.1.3</version>
-</dependency>
+<filter>
+    <filter-name>multipart</filter-name>
+    <filter-class>io.github.ghosthack.turismo.multipart.MultipartFilter</filter-class>
+</filter>
+<filter-mapping>
+    <filter-name>multipart</filter-name>
+    <url-pattern>/upload/*</url-pattern>
+</filter-mapping>
 ```
 
+## Deployment
+
+### Embedded Jetty
+
+```java
+import io.github.ghosthack.turismo.servlet.Servlet;
+import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.servlet.ServletContextHandler;
+import org.eclipse.jetty.servlet.ServletHolder;
+
+public class Main {
+    public static void main(String[] args) throws Exception {
+        Server server = new Server(8080);
+        ServletContextHandler ctx = new ServletContextHandler();
+        ctx.setContextPath("/");
+        ServletHolder holder = new ServletHolder(new Servlet());
+        holder.setInitParameter("routes", "com.example.AppRoutes");
+        ctx.addServlet(holder, "/*");
+        server.setHandler(ctx);
+        server.start();
+        server.join();
+    }
+}
+```
+
+### web.xml
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<web-app xmlns="http://java.sun.com/xml/ns/javaee" version="3.1">
+
+  <servlet>
+    <servlet-name>app</servlet-name>
+    <servlet-class>io.github.ghosthack.turismo.servlet.Servlet</servlet-class>
+    <init-param>
+      <param-name>routes</param-name>
+      <param-value>com.example.AppRoutes</param-value>
+    </init-param>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>app</servlet-name>
+    <url-pattern>/*</url-pattern>
+  </servlet-mapping>
+
+</web-app>
+```
+
+## License
+
+[Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)

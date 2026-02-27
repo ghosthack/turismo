@@ -5,10 +5,10 @@
 
   <servlet>
     <servlet-name>webapp-servlet</servlet-name>
-    <servlet-class>com.ghosthack.turismo.servlet.Servlet</servlet-class>
+    <servlet-class>io.github.ghosthack.turismo.servlet.Servlet</servlet-class>
     <init-param>
       <param-name>routes</param-name>
-      <param-value>com.ghosthack.turismo.example.ExampleWebAppRoutes</param-value>
+      <param-value>io.github.ghosthack.turismo.example.ExampleWebAppRoutes</param-value>
     </init-param>
   </servlet>
   <servlet-mapping>
