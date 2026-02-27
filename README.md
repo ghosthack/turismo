@@ -1,6 +1,6 @@
 # turismo
 
-A lightweight Sinatra/Express-style Java web framework built on the Servlet API.
+A lightweight Sinatra/Express-style Java web framework.
 
 [![CI](https://github.com/ghosthack/turismo/actions/workflows/ci.yml/badge.svg)](https://github.com/ghosthack/turismo/actions/workflows/ci.yml) [![Javadocs](https://javadoc.io/badge/io.github.ghosthack/turismo.svg)](https://javadoc.io/doc/io.github.ghosthack/turismo) [![Maven Central](https://img.shields.io/maven-central/v/io.github.ghosthack/turismo)](https://central.sonatype.com/artifact/io.github.ghosthack/turismo)
 
@@ -10,45 +10,138 @@ A lightweight Sinatra/Express-style Java web framework built on the Servlet API.
 <dependency>
     <groupId>io.github.ghosthack</groupId>
     <artifactId>turismo</artifactId>
-    <version>2.0.0</version>
+    <version>3.0.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'io.github.ghosthack:turismo:2.0.0'
+implementation 'io.github.ghosthack:turismo:3.0.0'
 ```
 
-Requires Java 11+.
+Requires Java 17+.
 
 > **Note:** Versions 1.x were published under `com.ghosthack:turismo`. The groupId changed to
 > `io.github.ghosthack` starting with 2.0.0.
 
 ## Quick start
 
-```java
-import io.github.ghosthack.turismo.action.Action;
-import io.github.ghosthack.turismo.routes.RoutesMap;
+Zero dependencies — uses the JDK's built-in HTTP server:
 
-public class AppRoutes extends RoutesMap {
-    @Override
-    protected void map() {
-        get("/", new Action() {
-            @Override
-            public void run() {
-                print("Hello World!");
-            }
-        });
+```java
+import static io.github.ghosthack.turismo.Turismo.*;
+
+public class App {
+    public static void main(String[] args) {
+        get("/hello", () -> print("Hello World!"));
+        get("/users/:id", () -> print("User " + param("id")));
+        start(8080);
     }
 }
 ```
 
-## Route types
+## Routing
+
+### Exact paths
+
+```java
+get("/hello", () -> print("Hello!"));
+post("/submit", () -> { status(201); print("Created"); });
+```
+
+### Named parameters
+
+```java
+get("/users/:id", () -> {
+    String id = param("id");
+    print("User " + id);
+});
+
+get("/users/:userId/posts/:postId", () -> {
+    print(param("userId") + "/" + param("postId"));
+});
+```
+
+### Wildcards
+
+```java
+get("/files/*/download", () -> print("Downloading"));
+```
+
+### Query parameters
+
+```java
+get("/search", () -> {
+    String q = param("q"); // from ?q=turismo
+    print("Search: " + q);
+});
+```
+
+## HTTP methods
+
+All standard methods: `get`, `post`, `put`, `delete`, `patch`, `head`, `options`.
+
+```java
+post("/data", () -> { status(201); print("created"); });
+delete("/users/:id", () -> print("Deleted " + param("id")));
+```
+
+## Response helpers
+
+```java
+// Set status code
+status(201);
+
+// Set headers
+header("X-Custom", "value");
+type("application/json");
+
+// Write body
+print("Hello World");
+
+// Redirects
+redirect("/new-location");       // 302
+movedPermanently("/new-url");    // 301
+redirect(307, "/temporary");     // custom code
+
+// 404
+notFound();
+```
+
+## Custom not-found handler
+
+```java
+notFound(() -> {
+    status(404);
+    type("application/json");
+    print("{\"error\":\"not found\"}");
+});
+```
+
+## Request access
+
+```java
+get("/echo", () -> {
+    String method = method();            // HTTP method
+    String path = path();                // request path
+    String auth = header("Authorization"); // request header
+    InputStream body = body();           // request body
+});
+```
+
+## Servlet deployment
+
+turismo also supports deployment in any Jakarta EE 10 servlet container
+(Tomcat 10.1+, Jetty 12+, etc.) via the `Servlet` class and
+`RoutesMap`/`RoutesList` API.
 
 ### RoutesMap — exact match (O(1) lookup)
 
 ```java
+import io.github.ghosthack.turismo.action.Action;
+import io.github.ghosthack.turismo.routes.RoutesMap;
+
 public class AppRoutes extends RoutesMap {
     @Override
     protected void map() {
@@ -73,16 +166,7 @@ public class AppRoutes extends RoutesList {
         get("/users/:id", new Action() {
             @Override
             public void run() {
-                String id = params("id");
-                print("User " + id);
-            }
-        });
-
-        // Wildcards match any segment
-        get("/files/*/download", new Action() {
-            @Override
-            public void run() {
-                print("Downloading file");
+                print("User " + params("id"));
             }
         });
 
@@ -92,122 +176,13 @@ public class AppRoutes extends RoutesList {
 }
 ```
 
-## HTTP methods
-
-All standard methods are supported: `get`, `post`, `put`, `delete`, `head`, `options`, `trace`, `patch`.
-
-```java
-post("/search", new Action() {
-    @Override
-    public void run() {
-        String query = req().getParameter("q");
-        print("Search: " + query);
-    }
-});
-
-delete("/users/:id", new Action() {
-    @Override
-    public void run() {
-        String id = params("id");
-        print("Deleted user " + id);
-    }
-});
-```
-
-## Redirects
-
-```java
-get("/old-page", new Action() {
-    @Override
-    public void run() {
-        movedPermanently("/new-page"); // 301
-    }
-});
-
-get("/temp", new Action() {
-    @Override
-    public void run() {
-        redirect("/destination"); // 302 via sendRedirect
-    }
-});
-```
-
-## JSP rendering
-
-```java
-get("/render", new Action() {
-    @Override
-    public void run() {
-        req().setAttribute("message", "Hello World!");
-        jsp("/WEB-INF/views/render.jsp");
-    }
-});
-```
-
-`render.jsp`:
-
-```jsp
-<%= request.getAttribute("message") %>
-```
-
-## Custom default route
-
-The default route sends a 404. Override it:
-
-```java
-route(new Action() {
-    @Override
-    public void run() {
-        res().setStatus(404);
-        print("Nothing here.");
-    }
-});
-```
-
-## Multipart file uploads
-
-```java
-import io.github.ghosthack.turismo.multipart.MultipartRequest;
-
-post("/upload", new Action() {
-    @Override
-    public void run() {
-        try {
-            MultipartRequest multipart = MultipartRequest.wrapAndParse(req());
-            String[] meta = multipart.getParameterValues("image");
-            String contentType = meta[0];
-            String fileName = meta[1];
-            byte[] bytes = (byte[]) multipart.getAttribute("image");
-            print("Uploaded " + fileName + " (" + bytes.length + " bytes)");
-        } catch (Exception e) {
-            throw new ActionException(e);
-        }
-    }
-});
-```
-
-Or use `MultipartFilter` in `web.xml` to handle parsing automatically:
-
-```xml
-<filter>
-    <filter-name>multipart</filter-name>
-    <filter-class>io.github.ghosthack.turismo.multipart.MultipartFilter</filter-class>
-</filter>
-<filter-mapping>
-    <filter-name>multipart</filter-name>
-    <url-pattern>/upload/*</url-pattern>
-</filter-mapping>
-```
-
-## Deployment
-
 ### Embedded Jetty
 
 ```java
 import io.github.ghosthack.turismo.servlet.Servlet;
+import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
+import org.eclipse.jetty.ee10.servlet.ServletHolder;
 import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.servlet.ServletContextHandler;
-import org.eclipse.jetty.servlet.ServletHolder;
 
 public class Main {
     public static void main(String[] args) throws Exception {
@@ -228,7 +203,7 @@ public class Main {
 
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
-<web-app xmlns="http://java.sun.com/xml/ns/javaee" version="3.1">
+<web-app xmlns="https://jakarta.ee/xml/ns/jakartaee" version="6.0">
 
   <servlet>
     <servlet-name>app</servlet-name>
@@ -244,6 +219,40 @@ public class Main {
   </servlet-mapping>
 
 </web-app>
+```
+
+### JSP rendering
+
+```java
+get("/render", new Action() {
+    @Override
+    public void run() {
+        req().setAttribute("message", "Hello World!");
+        jsp("/WEB-INF/views/render.jsp");
+    }
+});
+```
+
+### Multipart file uploads
+
+```java
+import io.github.ghosthack.turismo.multipart.MultipartRequest;
+
+post("/upload", new Action() {
+    @Override
+    public void run() {
+        try {
+            MultipartRequest multipart = MultipartRequest.wrapAndParse(req());
+            String[] meta = multipart.getParameterValues("image");
+            String contentType = meta[0];
+            String fileName = meta[1];
+            byte[] bytes = (byte[]) multipart.getAttribute("image");
+            print("Uploaded " + fileName + " (" + bytes.length + " bytes)");
+        } catch (Exception e) {
+            throw new ActionException(e);
+        }
+    }
+});
 ```
 
 ## Releasing

@@ -18,9 +18,9 @@ package io.github.ghosthack.turismo.action.behavior;
 
 import java.io.IOException;
 
-import javax.servlet.RequestDispatcher;
-import javax.servlet.ServletContext;
-import javax.servlet.ServletException;
+import jakarta.servlet.RequestDispatcher;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.ServletException;
 
 import io.github.ghosthack.turismo.action.ActionException;
 import io.github.ghosthack.turismo.servlet.Env;

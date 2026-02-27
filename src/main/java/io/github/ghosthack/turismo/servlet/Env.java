@@ -19,9 +19,9 @@ package io.github.ghosthack.turismo.servlet;
 import java.util.Collections;
 import java.util.Map;
 
-import javax.servlet.ServletContext;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Thread-local request context. Stores the current request, response,

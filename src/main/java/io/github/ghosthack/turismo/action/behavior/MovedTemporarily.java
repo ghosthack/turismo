@@ -16,7 +16,7 @@
 
 package io.github.ghosthack.turismo.action.behavior;
 
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpServletResponse;
 
 import io.github.ghosthack.turismo.servlet.Env;
 
