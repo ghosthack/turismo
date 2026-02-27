@@ -246,6 +246,14 @@ public class Main {
 </web-app>
 ```
 
+## Releasing
+
+1. Set the release version in `pom.xml` and `build.gradle`
+2. Commit, push, and merge via PR
+3. Create a GitHub release: `gh release create vX.Y.Z --target master --title "X.Y.Z" --notes "..."`
+4. The release workflow automatically deploys to Maven Central
+5. Publish the deployment at https://central.sonatype.com/publishing/deployments
+
 ## License
 
 [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
