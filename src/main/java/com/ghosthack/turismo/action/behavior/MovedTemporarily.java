@@ -23,6 +23,7 @@ import com.ghosthack.turismo.servlet.Env;
 public class MovedTemporarily {
 
     public void send302(String location) {
+        Redirect.validateLocation(location);
         Env.res().setStatus(HttpServletResponse.SC_MOVED_TEMPORARILY);
         Env.res().setHeader("Location", location);
     }

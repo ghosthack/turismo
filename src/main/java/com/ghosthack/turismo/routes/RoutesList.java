@@ -16,27 +16,18 @@
 
 package com.ghosthack.turismo.routes;
 
-import com.ghosthack.turismo.Resolver;
-import com.ghosthack.turismo.Routes;
-import com.ghosthack.turismo.action.NotFoundAction;
 import com.ghosthack.turismo.resolver.ListResolver;
 
-public abstract class RoutesList implements Routes {
-
-    protected final Resolver resolver;
+/**
+ * Routes container using list-based resolution with wildcard and
+ * named parameter support. Extend this class and override {@link #map()}
+ * to define your routes.
+ */
+public abstract class RoutesList extends AbstractRoutes {
 
     public RoutesList() {
-        resolver = new ListResolver();
-        resolver.route(new NotFoundAction());
-        map();
+        super(new ListResolver());
     }
-
-    @Override
-    public Resolver getResolver() {
-        return resolver;
-    }
-
-    protected abstract void map();
 
     // Route-alias shortcut methods
 
@@ -52,46 +43,12 @@ public abstract class RoutesList implements Routes {
         resolver.route(PUT, fromPath, targetPath);
     }
 
-    // Shortcuts methods
-
-    protected void get(final String path, Runnable runnable) {
-        resolver.route(GET, path, runnable);
+    protected void delete(final String fromPath, final String targetPath) {
+        resolver.route(DELETE, fromPath, targetPath);
     }
 
-    protected void post(final String path, Runnable runnable) {
-        resolver.route(POST, path, runnable);
+    protected void patch(final String fromPath, final String targetPath) {
+        resolver.route(PATCH, fromPath, targetPath);
     }
-
-    protected void put(final String path, Runnable runnable) {
-        resolver.route(PUT, path, runnable);
-    }
-
-    protected void head(final String path, Runnable runnable) {
-        resolver.route(HEAD, path, runnable);
-    }
-
-    protected void options(final String path, Runnable runnable) {
-        resolver.route(OPTIONS, path, runnable);
-    }
-
-    protected void delete(final String path, Runnable runnable) {
-        resolver.route(DELETE, path, runnable);
-    }
-
-    protected void trace(final String path, Runnable runnable) {
-        resolver.route(TRACE, path, runnable);
-    }
-
-    protected void route(Runnable runnable) {
-        resolver.route(runnable);
-    }
-
-    protected String POST = "POST";
-    protected String GET = "GET";
-    protected String HEAD = "HEAD";
-    protected String OPTIONS = "OPTIONS";
-    protected String PUT = "PUT";
-    protected String DELETE = "DELETE";
-    protected String TRACE = "TRACE";
 
 }

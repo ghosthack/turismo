@@ -1,7 +1,7 @@
 turismo -- a sinatra-like Java web framework.
 =============================================
 
-[![Build Status](https://travis-ci.org/ghosthack/turismo.svg?branch=master)](https://travis-ci.org/ghosthack/turismo) [![Javadocs](https://javadoc.io/badge/com.ghosthack/turismo.svg)](https://javadoc.io/doc/com.ghosthack/turismo) [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.ghosthack/turismo/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.ghosthack/turismo)
+[![CI](https://github.com/ghosthack/turismo/actions/workflows/ci.yml/badge.svg)](https://github.com/ghosthack/turismo/actions/workflows/ci.yml) [![Javadocs](https://javadoc.io/badge/com.ghosthack/turismo.svg)](https://javadoc.io/doc/com.ghosthack/turismo) [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.ghosthack/turismo/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.ghosthack/turismo)
 
 Quick intro
 -----------

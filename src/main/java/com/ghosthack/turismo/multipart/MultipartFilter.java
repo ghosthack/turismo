@@ -72,10 +72,9 @@ import javax.servlet.http.HttpServletRequest;
 public class MultipartFilter implements javax.servlet.Filter {
 
     private static final String CHARSET_NAME_PARAMETER = "charset-name";
-    public static String CHARSET_NAME = "ISO-8859-1";
+    private static final String DEFAULT_CHARSET_NAME = "ISO-8859-1";
 
-    // private static final java.util.logging.Logger LOG =
-    // java.util.logging.Logger.getLogger(Filter.class.getName());
+    private String charsetName = DEFAULT_CHARSET_NAME;
 
     /**
      * @see javax.servlet.Filter#doFilter(javax.servlet.ServletRequest,
@@ -89,9 +88,9 @@ public class MultipartFilter implements javax.servlet.Filter {
                 && contentType.startsWith(MultipartRequest.MULTIPART_FORM_DATA_BOUNDARY)) {
             final MultipartRequest multipartRequest;
             try {
-              multipartRequest = MultipartRequest.wrapAndParse((HttpServletRequest) request);
+              multipartRequest = MultipartRequest.wrapAndParse(
+                      (HttpServletRequest) request, charsetName);
             } catch (ParseException e) {
-                dump(request);
                 throw new ServletException(e);
             }
             chain.doFilter(multipartRequest, response);
@@ -101,21 +100,33 @@ public class MultipartFilter implements javax.servlet.Filter {
 
     }
 
-    private void dump(ServletRequest request) throws IOException {
-        // final String data = new Dumper().dump(request.getInputStream(),
-        // Filter.CHARSET_NAME);
-        // LOG.info(data);
-    }
-
     /**
      * @see javax.servlet.Filter#init(javax.servlet.FilterConfig)
      */
     public void init(FilterConfig config) throws ServletException {
-        final String charsetName = config
+        final String configCharset = config
                 .getInitParameter(CHARSET_NAME_PARAMETER);
-        if (charsetName != null) {
-            MultipartFilter.CHARSET_NAME = charsetName;
+        if (configCharset != null) {
+            this.charsetName = configCharset;
         }
+    }
+
+    /**
+     * Returns the charset name configured for this filter instance.
+     *
+     * @return the charset name
+     */
+    public String getCharsetName() {
+        return charsetName;
+    }
+
+    /**
+     * Returns the default charset name used when no filter configuration is available.
+     *
+     * @return the default charset name
+     */
+    public static String getDefaultCharsetName() {
+        return DEFAULT_CHARSET_NAME;
     }
 
     /**

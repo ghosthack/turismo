@@ -1,32 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 
-  <parent>
-    <groupId>org.sonatype.oss</groupId>
-    <artifactId>oss-parent</artifactId>
-    <version>6</version>
-  </parent>
-
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>com.ghosthack</groupId>
   <artifactId>turismo</artifactId>
-  <version>1.1.4-SNAPSHOT</version>
+  <version>1.2.0-SNAPSHOT</version>
   <packaging>jar</packaging>
 
   <name>turismo</name>
   <description>turismo web framework</description>
-  <url>http://turismo.ghosthack.com/</url>
+  <url>https://github.com/ghosthack/turismo</url>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <jetty.version>7.4.5.v20110725</jetty.version>
+    <jetty.version>9.4.54.v20240208</jetty.version>
   </properties>
 
   <licenses>
     <license>
       <name>The Apache Software License, Version 2.0</name>
-      <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
       <distribution>repo</distribution>
     </license>
   </licenses>
@@ -41,16 +35,16 @@
     <plugins>
       <plugin>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>2.3.2</version>
+        <version>3.13.0</version>
         <configuration>
           <encoding>${project.build.sourceEncoding}</encoding>
-          <source>1.6</source>
-          <target>1.6</target>
+          <source>1.8</source>
+          <target>1.8</target>
         </configuration>
       </plugin>
       <plugin>
         <artifactId>maven-source-plugin</artifactId>
-        <version>2.1.2</version>
+        <version>3.3.1</version>
         <executions>
           <execution>
             <id>attach-sources</id>
@@ -62,7 +56,7 @@
       </plugin>
       <plugin>
         <artifactId>maven-javadoc-plugin</artifactId>
-        <version>2.8</version>
+        <version>3.10.1</version>
         <executions>
           <execution>
             <id>attach-javadocs</id>
@@ -72,26 +66,30 @@
           </execution>
         </executions>
       </plugin>
+      <plugin>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.5.2</version>
+      </plugin>
     </plugins>
   </build>
 
   <dependencies>
     <dependency>
       <groupId>javax.servlet</groupId>
-      <artifactId>servlet-api</artifactId>
-      <version>2.5</version>
+      <artifactId>javax.servlet-api</artifactId>
+      <version>3.1.0</version>
       <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
-      <version>4.4</version>
+      <version>4.13.2</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.mockito</groupId>
-      <artifactId>mockito-core</artifactId>  
-      <version>1.9.0-rc1</version> 
+      <artifactId>mockito-core</artifactId>
+      <version>5.14.2</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -102,7 +100,7 @@
     </dependency>
     <dependency>
       <groupId>org.eclipse.jetty</groupId>
-      <artifactId>jetty-jsp-2.1</artifactId>
+      <artifactId>apache-jsp</artifactId>
       <version>${jetty.version}</version>
       <scope>test</scope>
     </dependency>
@@ -110,12 +108,6 @@
       <groupId>org.eclipse.jetty</groupId>
       <artifactId>jetty-webapp</artifactId>
       <version>${jetty.version}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.tomcat</groupId>
-      <artifactId>jasper</artifactId>
-      <version>6.0.33</version>
       <scope>test</scope>
     </dependency>
   </dependencies>

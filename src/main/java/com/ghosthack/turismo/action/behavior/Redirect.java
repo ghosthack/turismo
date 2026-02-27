@@ -24,10 +24,28 @@ import com.ghosthack.turismo.servlet.Env;
 public class Redirect {
 
     public void redirect(String location) {
+        validateLocation(location);
         try {
-            Env.res().sendRedirect(String.valueOf(location));
+            Env.res().sendRedirect(location);
         } catch (IOException e) {
             throw new ActionException(e);
+        }
+    }
+
+    /**
+     * Validates that the location does not contain CR/LF characters
+     * which could enable HTTP response splitting (header injection).
+     *
+     * @param location the redirect target
+     * @throws IllegalArgumentException if location is null or contains CR/LF
+     */
+    static void validateLocation(String location) {
+        if (location == null) {
+            throw new IllegalArgumentException("Location must not be null");
+        }
+        if (location.indexOf('\r') >= 0 || location.indexOf('\n') >= 0) {
+            throw new IllegalArgumentException(
+                    "Location must not contain CR or LF characters (possible header injection)");
         }
     }
 

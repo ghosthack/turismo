@@ -22,9 +22,10 @@ import com.ghosthack.turismo.servlet.Env;
 
 public class MovedPermanently {
 
-    public void send301(Object location) {
+    public void send301(String location) {
+        Redirect.validateLocation(location);
         Env.res().setStatus(HttpServletResponse.SC_MOVED_PERMANENTLY);
-        Env.res().setHeader("Location", String.valueOf(location));
+        Env.res().setHeader("Location", location);
     }
 
 }

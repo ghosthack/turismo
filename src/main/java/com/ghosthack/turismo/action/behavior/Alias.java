@@ -19,6 +19,7 @@ package com.ghosthack.turismo.action.behavior;
 import java.io.IOException;
 
 import javax.servlet.RequestDispatcher;
+import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 
 import com.ghosthack.turismo.action.ActionException;
@@ -28,8 +29,14 @@ import com.ghosthack.turismo.servlet.Env;
 public class Alias {
 
     public void forward(final String target) {
-        final RequestDispatcher dispatcher = Env.ctx()
-                .getRequestDispatcher(target);
+        final ServletContext ctx = Env.ctx();
+        if (ctx == null) {
+            throw new ActionException("ServletContext is not available");
+        }
+        final RequestDispatcher dispatcher = ctx.getRequestDispatcher(target);
+        if (dispatcher == null) {
+            throw new ActionException("No resource found for: " + target);
+        }
         try {
             dispatcher.forward(Env.req(), Env.res());
         } catch (ServletException e) {

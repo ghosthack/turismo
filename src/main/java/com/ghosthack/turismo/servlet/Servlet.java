@@ -81,6 +81,11 @@ public class Servlet extends HttpServlet {
         super.init();
         context = config.getServletContext();
         final String routesParam = config.getInitParameter(ROUTES);
+        if (routesParam == null || routesParam.trim().isEmpty()) {
+            throw new ServletException(
+                    "Missing required init-param 'routes'. "
+                    + "Specify the fully qualified class name of your Routes implementation.");
+        }
         try {
             routes = createInstance(routesParam, Routes.class);
         } catch (ClassForNameException e) {

@@ -51,20 +51,23 @@ public class MapResolver extends MethodPathResolver {
     }
 
     public void route(final String method, final String path, Runnable runnable) {
-        r(method, path, runnable);
+        addRoute(method, path, runnable);
     }
 
     private Runnable findRoute(String method, String path) {
         Map<String, Runnable> methodMap = methodPathMap.get(method);
-        
-        if (methodMap == null) {
-            methodMap = methodPathMap.get(null);
+        if (methodMap != null) {
+            Runnable route = methodMap.get(path);
+            if (route != null) {
+                return route;
+            }
         }
-
-        return methodMap != null? methodMap.get(path) : null;
+        // Fall through to method-agnostic routes
+        Map<String, Runnable> defaultMap = methodPathMap.get(null);
+        return defaultMap != null ? defaultMap.get(path) : null;
     }
 
-    private void r(final String method, final String path, Runnable action) {
+    private void addRoute(final String method, final String path, Runnable action) {
         Map<String, Runnable> methodMap = methodPathMap.get(method);
         if(methodMap == null) {
             methodMap = new HashMap<String, Runnable>();
@@ -75,7 +78,7 @@ public class MapResolver extends MethodPathResolver {
 
     @Override
     public void route(String method, String fromPath, String targetPath) {
-        throw new IllegalAccessError("Not implemented");
+        throw new UnsupportedOperationException("Route aliasing is not supported by MapResolver");
     }
 
 }

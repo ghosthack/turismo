@@ -4,11 +4,10 @@ import static com.ghosthack.turismo.HttpMocks.getRequestMock;
 import static com.ghosthack.turismo.HttpMocks.getResponseMock;
 import static org.mockito.Mockito.verify;
 
-import java.io.IOException;
-
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -23,11 +22,10 @@ public class RoutesMapTest {
         routes = new RoutesMap() {
             @Override
             protected void map() {
-                // TEST GET
                 get("/", new Runnable() {
                     @Override
                     public void run(){
-                        Env.res().setStatus(200);
+                        Env.res().setStatus(HttpServletResponse.SC_OK);
                     }
                 });
                 get("/foo", new Runnable() {
@@ -51,65 +49,90 @@ public class RoutesMapTest {
                 route(new Runnable() {
                     @Override
                     public void run() {
-                        Env.res().setStatus(404);
+                        Env.res().setStatus(HttpServletResponse.SC_NOT_FOUND);
                     }
                 });
             }
         };
     }
 
-    @Test
-    public void testGET1() throws IOException {
+    @After
+    public void tearDown() {
+        Env.destroy();
+    }
 
+    @Test
+    public void testGET1() {
         HttpServletRequest req = getRequestMock("GET", "/");
         HttpServletResponse res = getResponseMock();
         Env.create(req, res, null);
         routes.getResolver().resolve().run();
-
-        verify(res).setStatus(200);
+        verify(res).setStatus(HttpServletResponse.SC_OK);
     }
 
     @Test
-    public void testGET2() throws IOException {
-
+    public void testGET2() {
         HttpServletRequest req = getRequestMock("GET", "/foo");
         HttpServletResponse res = getResponseMock();
         Env.create(req, res, null);
         routes.getResolver().resolve().run();
-
         verify(res).setStatus(201);
     }
 
     @Test
-    public void testPUT() throws IOException {
-
+    public void testPUT() {
         HttpServletRequest req = getRequestMock("PUT", "/");
         HttpServletResponse res = getResponseMock();
         Env.create(req, res, null);
         routes.getResolver().resolve().run();
-
         verify(res).setStatus(202);
     }
 
     @Test
-    public void testPOST() throws IOException {
-
+    public void testPOST() {
         HttpServletRequest req = getRequestMock("POST", "/bar");
         HttpServletResponse res = getResponseMock();
         Env.create(req, res, null);
         routes.getResolver().resolve().run();
-
         verify(res).setStatus(203);
     }
 
     @Test
-    public void testNotFound() throws IOException {
-
+    public void testNotFound() {
         HttpServletRequest req = getRequestMock("POST", "/everyThingElse");
         HttpServletResponse res = getResponseMock();
         Env.create(req, res, null);
         routes.getResolver().resolve().run();
+        verify(res).setStatus(HttpServletResponse.SC_NOT_FOUND);
+    }
 
-        verify(res).setStatus(404);
+    @Test
+    public void testMethodAgnosticRouteFallthrough() {
+        RoutesMap fallbackRoutes = new RoutesMap() {
+            @Override
+            protected void map() {
+                // Register a method-agnostic route
+                resolver.route(null, "/common", new Runnable() {
+                    @Override
+                    public void run() {
+                        Env.res().setStatus(HttpServletResponse.SC_OK);
+                    }
+                });
+                // Register a GET-specific route
+                get("/specific", new Runnable() {
+                    @Override
+                    public void run() {
+                        Env.res().setStatus(201);
+                    }
+                });
+            }
+        };
+
+        // GET /common should fall through to the method-agnostic route
+        HttpServletRequest req = getRequestMock("GET", "/common");
+        HttpServletResponse res = getResponseMock();
+        Env.create(req, res, null);
+        fallbackRoutes.getResolver().resolve().run();
+        verify(res).setStatus(HttpServletResponse.SC_OK);
     }
 }

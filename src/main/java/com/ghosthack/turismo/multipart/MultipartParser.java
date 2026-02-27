@@ -21,6 +21,31 @@ import java.util.logging.Logger;
  */
 public final class MultipartParser {
 
+    /** Default maximum content size: 10 MB */
+    public static final int DEFAULT_MAX_CONTENT_SIZE = 10 * 1024 * 1024;
+
+    private static volatile int maxContentSize = DEFAULT_MAX_CONTENT_SIZE;
+
+    /**
+     * Sets the maximum allowed content size for multipart uploads.
+     *
+     * @param maxSize the maximum size in bytes (must be positive)
+     */
+    public static void setMaxContentSize(int maxSize) {
+        if (maxSize <= 0)
+            throw new IllegalArgumentException("maxContentSize must be positive");
+        maxContentSize = maxSize;
+    }
+
+    /**
+     * Gets the maximum allowed content size for multipart uploads.
+     *
+     * @return the maximum size in bytes
+     */
+    public static int getMaxContentSize() {
+        return maxContentSize;
+    }
+
     /**
      * Constructs a new parser for multipart form data.
      * 
@@ -42,17 +67,18 @@ public final class MultipartParser {
         if (is == null || boundary == null || parameters == null
                 || charsetName == null)
             throw new IllegalArgumentException();
+        if (size <= 0)
+            throw new IllegalArgumentException("Content size must be positive, was: " + size);
+        if (size > maxContentSize)
+            throw new IllegalArgumentException(
+                    "Content size " + size + " exceeds maximum allowed size " + maxContentSize);
         this.is = new BufferedInputStream(is, BUFFER_SIZE);
         this.parameters = parameters;
         charsetDecoder = Charset.forName(charsetName).newDecoder();
         boundarySize = boundary.getBytes().length;
         separator = (LINE_STRING + boundary).getBytes();
         buffer = new byte[separator.length + OFFSET];
-        // Allocates the full file size in memmory, will throw OOME if memory is
-        // not enough
-        // Beware: there is a bug in 1.4.2_04 and earlier versions
-        // http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=4879883
-        bb = ByteBuffer.allocateDirect(size);
+        bb = ByteBuffer.allocate(size);
     }
 
     /**

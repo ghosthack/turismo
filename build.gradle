@@ -1,32 +1,36 @@
-apply plugin: "java"
-
-// More details: http://gradle.org/docs/current/userguide/maven_plugin.html
-apply plugin: "maven"
+plugins {
+    id "java"
+    id "maven-publish"
+}
 
 group = "com.ghosthack"
-version = "1.1.4-SNAPSHOT"
+version = "1.2.0-SNAPSHOT"
 description = "turismo"
 
-sourceCompatibility = 1.6
-targetCompatibility = 1.6
-
-configurations.all {
-}
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
 
 repositories {
-  mavenCentral()
+    mavenCentral()
 }
 
-def jetty = ["group": "org.eclipse.jetty", "version": "7.4.5.v20110725" ]
+def jettyVersion = "9.4.54.v20240208"
 
 dependencies {
-  testCompile "junit:junit:4.4"
-  testCompile "org.mockito:mockito-core:1.9.0-rc1"
-  testCompile "${jetty.group}:jetty-servlet:${jetty.version}"
-  testCompile "${jetty.group}:jetty-jsp-2.1:${jetty.version}"
-  testCompile "${jetty.group}:jetty-webapp:${jetty.version}"
-  testCompile "org.apache.tomcat:jasper:6.0.33"
+    testImplementation "junit:junit:4.13.2"
+    testImplementation "org.mockito:mockito-core:5.14.2"
+    testImplementation "org.eclipse.jetty:jetty-servlet:${jettyVersion}"
+    testImplementation "org.eclipse.jetty:apache-jsp:${jettyVersion}"
+    testImplementation "org.eclipse.jetty:jetty-webapp:${jettyVersion}"
 
-  // should be provided by the container
-  compileOnly("javax.servlet:servlet-api:2.5")
+    // should be provided by the container
+    compileOnly "javax.servlet:javax.servlet-api:3.1.0"
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+        }
+    }
 }

@@ -40,7 +40,8 @@ public class MultipartRequest extends HttpServletRequestWrapper implements
      * @see javax.servlet.ServletRequest#getParameterMap()
      * @return Map
      */
-    public Map<String, String[]> getParameteMap() {
+    @Override
+    public Map<String, String[]> getParameterMap() {
         return parameterMap;
     }
 
@@ -87,13 +88,38 @@ public class MultipartRequest extends HttpServletRequestWrapper implements
         return boundary;
     }
 
+    /**
+     * Wraps the request and parses multipart data using the default charset.
+     *
+     * @param req the HTTP request
+     * @return the wrapped multipart request
+     * @throws ParseException if the multipart data cannot be parsed
+     * @throws IOException if an I/O error occurs
+     */
     public static MultipartRequest wrapAndParse(HttpServletRequest req) throws ParseException, IOException {
+        return wrapAndParse(req, MultipartFilter.getDefaultCharsetName());
+    }
+
+    /**
+     * Wraps the request and parses multipart data using the specified charset.
+     *
+     * @param req the HTTP request
+     * @param defaultCharset the charset to use if the request has no encoding
+     * @return the wrapped multipart request
+     * @throws ParseException if the multipart data cannot be parsed
+     * @throws IOException if an I/O error occurs
+     */
+    public static MultipartRequest wrapAndParse(HttpServletRequest req, String defaultCharset)
+            throws ParseException, IOException {
         final MultipartRequest multipart = new MultipartRequest(req);
         final String boundary = multipart.getBoundary();
         final int size = req.getContentLength();
+        if (size < 0) {
+            throw new ParseException("Content-Length is missing or invalid");
+        }
         String encoding = req.getCharacterEncoding();
-        if(encoding == null) {
-            encoding = MultipartFilter.CHARSET_NAME;
+        if (encoding == null) {
+            encoding = defaultCharset;
         }
         InputStream is = null;
         try {
