@@ -16,9 +16,9 @@
 
 package io.github.ghosthack.turismo.action;
 
-import javax.servlet.ServletContext;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import io.github.ghosthack.turismo.action.behavior.Alias;
 import io.github.ghosthack.turismo.action.behavior.MovedPermanently;
@@ -76,7 +76,7 @@ public abstract class Action implements Runnable {
     }
 
     /**
-     * Forwards the request to the given target path via {@link javax.servlet.RequestDispatcher}.
+     * Forwards the request to the given target path via {@link jakarta.servlet.RequestDispatcher}.
      *
      * @param target the target path
      */
@@ -85,7 +85,7 @@ public abstract class Action implements Runnable {
     }
 
     /**
-     * Forwards the request to the given target path via {@link javax.servlet.RequestDispatcher}.
+     * Forwards the request to the given target path via {@link jakarta.servlet.RequestDispatcher}.
      *
      * @param target the target path
      */

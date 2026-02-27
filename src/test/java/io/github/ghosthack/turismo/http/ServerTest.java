@@ -5,7 +5,7 @@ import static org.junit.Assert.*;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
-import java.net.URL;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 
 import org.junit.After;
@@ -99,8 +99,8 @@ public class ServerTest {
         Turismo.get("/old", () -> Turismo.redirect("/new"));
         Server server = startServer();
         try {
-            URL url = new URL("http://localhost:" + server.port() + "/old");
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            HttpURLConnection conn = (HttpURLConnection) URI.create(
+                    "http://localhost:" + server.port() + "/old").toURL().openConnection();
             conn.setInstanceFollowRedirects(false);
             assertEquals(302, conn.getResponseCode());
             assertEquals("/new", conn.getHeaderField("Location"));
@@ -118,9 +118,8 @@ public class ServerTest {
         });
         Server server = startServer();
         try {
-            URL url = new URL(
-                    "http://localhost:" + server.port() + "/json");
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            HttpURLConnection conn = (HttpURLConnection) URI.create(
+                    "http://localhost:" + server.port() + "/json").toURL().openConnection();
             assertEquals(200, conn.getResponseCode());
             assertEquals("application/json",
                     conn.getHeaderField("Content-Type"));
@@ -188,8 +187,8 @@ public class ServerTest {
     }
 
     private HttpResult fetch(String method, String urlStr) throws Exception {
-        URL url = new URL(urlStr);
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        HttpURLConnection conn = (HttpURLConnection)
+                URI.create(urlStr).toURL().openConnection();
         conn.setRequestMethod(method);
         conn.setInstanceFollowRedirects(false);
         int status = conn.getResponseCode();

@@ -1,7 +1,7 @@
 package io.github.ghosthack.turismo.multipart;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletRequestWrapper;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequestWrapper;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -79,7 +79,7 @@ public class MultipartRequest extends HttpServletRequestWrapper implements
     }
 
     /**
-     * @see javax.servlet.ServletRequest#getParameterMap()
+     * @see jakarta.servlet.ServletRequest#getParameterMap()
      * @return an unmodifiable view of the parameter map
      */
     @Override
@@ -87,20 +87,20 @@ public class MultipartRequest extends HttpServletRequestWrapper implements
         return Collections.unmodifiableMap(parameterMap);
     }
 
-    /** @see javax.servlet.ServletRequest#getParameter(java.lang.String) */
+    /** @see jakarta.servlet.ServletRequest#getParameter(java.lang.String) */
     @Override
     public String getParameter(String name) {
         final String[] values = getParameterValues(name);
         return (values == null) ? null : values[0];
     }
 
-    /** @see javax.servlet.ServletRequest#getParameterNames() */
+    /** @see jakarta.servlet.ServletRequest#getParameterNames() */
     @Override
     public Enumeration<String> getParameterNames() {
         return Collections.enumeration(parameterMap.keySet());
     }
 
-    /** @see javax.servlet.ServletRequest#getParameterValues(java.lang.String) */
+    /** @see jakarta.servlet.ServletRequest#getParameterValues(java.lang.String) */
     @Override
     public String[] getParameterValues(String name) {
         return parameterMap.get(name);

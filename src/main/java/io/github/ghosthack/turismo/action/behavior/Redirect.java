@@ -22,7 +22,7 @@ import io.github.ghosthack.turismo.action.ActionException;
 import io.github.ghosthack.turismo.servlet.Env;
 
 /**
- * Sends an HTTP redirect response via {@link javax.servlet.http.HttpServletResponse#sendRedirect}.
+ * Sends an HTTP redirect response via {@link jakarta.servlet.http.HttpServletResponse#sendRedirect}.
  */
 public class Redirect {
 

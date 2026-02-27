@@ -2,12 +2,12 @@ package io.github.ghosthack.turismo.multipart;
 
 import java.io.IOException;
 
-import javax.servlet.FilterChain;
-import javax.servlet.FilterConfig;
-import javax.servlet.ServletException;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletResponse;
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.FilterConfig;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * Parses submitted multipart form data and creates a new request object.
@@ -60,7 +60,7 @@ import javax.servlet.http.HttpServletRequest;
  *  &lt;/filter-mapping&gt;
  * </pre>
  */
-public class MultipartFilter implements javax.servlet.Filter {
+public class MultipartFilter implements jakarta.servlet.Filter {
 
     /** Creates a new MultipartFilter with the default charset. */
     public MultipartFilter() {
@@ -72,8 +72,8 @@ public class MultipartFilter implements javax.servlet.Filter {
     private String charsetName = DEFAULT_CHARSET_NAME;
 
     /**
-     * @see javax.servlet.Filter#doFilter(javax.servlet.ServletRequest,
-     *      javax.servlet.ServletResponse, javax.servlet.FilterChain)
+     * @see jakarta.servlet.Filter#doFilter(jakarta.servlet.ServletRequest,
+     *      jakarta.servlet.ServletResponse, jakarta.servlet.FilterChain)
      */
     @Override
     public void doFilter(ServletRequest request, ServletResponse response,
@@ -97,7 +97,7 @@ public class MultipartFilter implements javax.servlet.Filter {
     }
 
     /**
-     * @see javax.servlet.Filter#init(javax.servlet.FilterConfig)
+     * @see jakarta.servlet.Filter#init(jakarta.servlet.FilterConfig)
      */
     @Override
     public void init(FilterConfig config) throws ServletException {
@@ -127,7 +127,7 @@ public class MultipartFilter implements javax.servlet.Filter {
     }
 
     /**
-     * @see javax.servlet.Filter#destroy()
+     * @see jakarta.servlet.Filter#destroy()
      */
     @Override
     public void destroy() {
