@@ -248,10 +248,10 @@ public class Main {
 
 ## Releasing
 
-1. Set the release version in `pom.xml` and `build.gradle`
+1. Set the release version in `pom.xml` and `build.gradle` (remove `-SNAPSHOT`)
 2. Commit, push, and merge via PR
-3. Create a GitHub release: `gh release create vX.Y.Z --target master --title "X.Y.Z" --notes "..."`
-4. The release workflow automatically deploys to Maven Central
+3. CI detects the version change and creates a GitHub release automatically
+4. The release workflow deploys to Maven Central
 5. Publish the deployment at https://central.sonatype.com/publishing/deployments
 
 ## License
