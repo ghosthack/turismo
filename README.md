@@ -1,6 +1,6 @@
 # turismo
 
-A Sinatra-like Java web framework built on the Servlet API.
+A lightweight Sinatra/Express-style Java web framework built on the Servlet API.
 
 [![CI](https://github.com/ghosthack/turismo/actions/workflows/ci.yml/badge.svg)](https://github.com/ghosthack/turismo/actions/workflows/ci.yml) [![Javadocs](https://javadoc.io/badge/io.github.ghosthack/turismo.svg)](https://javadoc.io/doc/io.github.ghosthack/turismo) [![Maven Central](https://img.shields.io/maven-central/v/io.github.ghosthack/turismo)](https://central.sonatype.com/artifact/io.github.ghosthack/turismo)
 
