@@ -29,7 +29,7 @@ import jakarta.servlet.http.HttpServletResponse;
  */
 public class Env {
     
-    private static ThreadLocal<Env> locals = new ThreadLocal<Env>(); 
+    private static final ThreadLocal<Env> locals = new ThreadLocal<>();
     
     /**
      * Returns the current thread's Env, or {@code null} if none has been created.

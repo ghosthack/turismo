@@ -6,8 +6,11 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.After;
@@ -37,12 +40,15 @@ public class TurismoTest {
     @Test
     public void testExactRouteMethodIsolation() {
         Runnable getAction = () -> {};
-        Runnable postAction = () -> {};
         Turismo.get("/resource", getAction);
-        Turismo.post("/resource", postAction);
+        Turismo.post("/resource", () -> {});
 
         assertSame(getAction, Turismo.resolve("GET", "/resource").action);
-        assertSame(postAction, Turismo.resolve("POST", "/resource").action);
+        // POST wraps the action to set status 201, so test it via handle
+        assertNotNull(Turismo.resolve("POST", "/resource").action);
+        assertNotSame(
+                Turismo.resolve("GET", "/resource").action,
+                Turismo.resolve("POST", "/resource").action);
     }
 
     @Test
@@ -132,7 +138,7 @@ public class TurismoTest {
         Turismo.options("/a", a);
 
         assertSame(a, Turismo.resolve("GET", "/a").action);
-        assertSame(a, Turismo.resolve("POST", "/a").action);
+        assertNotNull(Turismo.resolve("POST", "/a").action); // wrapped for 201
         assertSame(a, Turismo.resolve("PUT", "/a").action);
         assertSame(a, Turismo.resolve("DELETE", "/a").action);
         assertSame(a, Turismo.resolve("PATCH", "/a").action);
@@ -268,6 +274,252 @@ public class TurismoTest {
     @Test(expected = IllegalArgumentException.class)
     public void testRedirectRejectsNull() {
         Turismo.validateLocation(null);
+    }
+
+    // ---------------------------------------------------------------
+    // String body shorthand
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testGetStringBody() {
+        MockContext ctx = new MockContext("GET", "/hello");
+        Turismo.get("/hello", "Hello World!");
+
+        Turismo.handle(ctx);
+        assertEquals("Hello World!", ctx.printed.toString());
+        assertEquals(200, ctx.statusCode);
+    }
+
+    @Test
+    public void testPostStringBody() {
+        MockContext ctx = new MockContext("POST", "/create");
+        Turismo.post("/create", "Created!");
+
+        Turismo.handle(ctx);
+        assertEquals("Created!", ctx.printed.toString());
+        assertEquals(201, ctx.statusCode);
+    }
+
+    @Test
+    public void testPutStringBody() {
+        MockContext ctx = new MockContext("PUT", "/update");
+        Turismo.put("/update", "Updated");
+
+        Turismo.handle(ctx);
+        assertEquals("Updated", ctx.printed.toString());
+    }
+
+    @Test
+    public void testDeleteStringBody() {
+        MockContext ctx = new MockContext("DELETE", "/remove");
+        Turismo.delete("/remove", "Deleted");
+
+        Turismo.handle(ctx);
+        assertEquals("Deleted", ctx.printed.toString());
+    }
+
+    @Test
+    public void testPatchStringBody() {
+        MockContext ctx = new MockContext("PATCH", "/patch");
+        Turismo.patch("/patch", "Patched");
+
+        Turismo.handle(ctx);
+        assertEquals("Patched", ctx.printed.toString());
+    }
+
+    // ---------------------------------------------------------------
+    // Default POST status 201
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testPostDefaultStatus201() {
+        MockContext ctx = new MockContext("POST", "/items");
+        Turismo.post("/items", () -> Turismo.print("created"));
+
+        Turismo.handle(ctx);
+        assertEquals(201, ctx.statusCode);
+        assertEquals("created", ctx.printed.toString());
+    }
+
+    @Test
+    public void testPostCanOverrideStatus() {
+        MockContext ctx = new MockContext("POST", "/items");
+        Turismo.post("/items", () -> { Turismo.status(200); Turismo.print("ok"); });
+
+        Turismo.handle(ctx);
+        assertEquals(200, ctx.statusCode);
+    }
+
+    // ---------------------------------------------------------------
+    // Varargs print
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testVarargsPrint() {
+        MockContext ctx = new MockContext("GET", "/greet");
+        Turismo.get("/greet", () -> Turismo.print("Hello", " ", "World"));
+
+        Turismo.handle(ctx);
+        assertEquals("Hello World", ctx.printed.toString());
+    }
+
+    @Test
+    public void testVarargsPrintSingleArg() {
+        MockContext ctx = new MockContext("GET", "/one");
+        Turismo.get("/one", () -> Turismo.print("just one"));
+
+        Turismo.handle(ctx);
+        assertEquals("just one", ctx.printed.toString());
+    }
+
+    // ---------------------------------------------------------------
+    // JSON serializer
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testToJsonNull() {
+        assertEquals("null", Turismo.toJson(null));
+    }
+
+    @Test
+    public void testToJsonString() {
+        assertEquals("\"hello\"", Turismo.toJson("hello"));
+    }
+
+    @Test
+    public void testToJsonStringEscaping() {
+        assertEquals("\"line1\\nline2\"", Turismo.toJson("line1\nline2"));
+        assertEquals("\"tab\\there\"", Turismo.toJson("tab\there"));
+        assertEquals("\"quote\\\"here\"", Turismo.toJson("quote\"here"));
+        assertEquals("\"back\\\\slash\"", Turismo.toJson("back\\slash"));
+    }
+
+    @Test
+    public void testToJsonNumbers() {
+        assertEquals("42", Turismo.toJson(42));
+        assertEquals("3.14", Turismo.toJson(3.14));
+        assertEquals("100", Turismo.toJson(100L));
+    }
+
+    @Test
+    public void testToJsonBoolean() {
+        assertEquals("true", Turismo.toJson(true));
+        assertEquals("false", Turismo.toJson(false));
+    }
+
+    @Test
+    public void testToJsonMap() {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("name", "turismo");
+        map.put("version", 3);
+        assertEquals("{\"name\":\"turismo\",\"version\":3}", Turismo.toJson(map));
+    }
+
+    @Test
+    public void testToJsonList() {
+        assertEquals("[1,2,3]", Turismo.toJson(Arrays.asList(1, 2, 3)));
+    }
+
+    @Test
+    public void testToJsonObjectArray() {
+        assertEquals("[\"a\",\"b\"]", Turismo.toJson(new String[]{"a", "b"}));
+    }
+
+    @Test
+    public void testToJsonIntArray() {
+        assertEquals("[1,2,3]", Turismo.toJson(new int[]{1, 2, 3}));
+    }
+
+    @Test
+    public void testToJsonNestedMap() {
+        Map<String, Object> inner = new LinkedHashMap<>();
+        inner.put("ok", true);
+        Map<String, Object> outer = new LinkedHashMap<>();
+        outer.put("status", inner);
+        assertEquals("{\"status\":{\"ok\":true}}", Turismo.toJson(outer));
+    }
+
+    @Test
+    public void testToJsonEmptyMap() {
+        assertEquals("{}", Turismo.toJson(Collections.emptyMap()));
+    }
+
+    @Test
+    public void testToJsonEmptyList() {
+        assertEquals("[]", Turismo.toJson(Collections.emptyList()));
+    }
+
+    @Test
+    public void testJsonSetsContentType() {
+        MockContext ctx = new MockContext("GET", "/api");
+        Turismo.get("/api", () -> Turismo.json(Map.of("ok", true)));
+
+        Turismo.handle(ctx);
+        assertEquals("application/json", ctx.responseHeaders.get("Content-Type"));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testToJsonUnsupportedType() {
+        Turismo.toJson(new Object());
+    }
+
+    @Test
+    public void testToJsonLongArray() {
+        assertEquals("[1,2]", Turismo.toJson(new long[]{1L, 2L}));
+    }
+
+    @Test
+    public void testToJsonDoubleArray() {
+        assertEquals("[1.5,2.5]", Turismo.toJson(new double[]{1.5, 2.5}));
+    }
+
+    @Test
+    public void testToJsonBooleanArray() {
+        assertEquals("[true,false]", Turismo.toJson(new boolean[]{true, false}));
+    }
+
+    @Test
+    public void testToJsonControlCharEscaping() {
+        // Control char below 0x20 that isn't \b\f\n\r\t
+        assertEquals("\"\\u0001\"", Turismo.toJson("\u0001"));
+    }
+
+    // ---------------------------------------------------------------
+    // PathPattern
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testPathPatternExactMatch() {
+        PathPattern p = new PathPattern("/users/list");
+        assertNotNull(p.match("/users/list".split("/")));
+        assertNull(p.match("/users/other".split("/")));
+    }
+
+    @Test
+    public void testPathPatternParams() {
+        PathPattern p = new PathPattern("/users/:id");
+        Map<String, String> result = p.match("/users/42".split("/"));
+        assertNotNull(result);
+        assertEquals("42", result.get("id"));
+    }
+
+    @Test
+    public void testPathPatternWildcard() {
+        PathPattern p = new PathPattern("/files/*/view");
+        Map<String, String> result = p.match("/files/report/view".split("/"));
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testPathPatternNullPath() {
+        new PathPattern(null);
+    }
+
+    @Test
+    public void testPathPatternSegmentMismatch() {
+        PathPattern p = new PathPattern("/a/b");
+        assertNull(p.match("/a/b/c".split("/")));
     }
 
     // ---------------------------------------------------------------

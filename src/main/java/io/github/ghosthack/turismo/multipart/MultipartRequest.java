@@ -20,13 +20,16 @@ public class MultipartRequest extends HttpServletRequestWrapper implements
     /** Multipart form data content type prefix */
     public static final String MULTIPART_FORM_DATA = "multipart/form-data";
 
-    /** @deprecated Use {@link #MULTIPART_FORM_DATA} instead */
-    @Deprecated
+    /**
+     * @deprecated Use {@link #MULTIPART_FORM_DATA} and
+     *             {@link #extractBoundary(String)} instead.
+     */
+    @Deprecated(since = "3.0.0", forRemoval = true)
     public static final String MULTIPART_FORM_DATA_BOUNDARY = "multipart/form-data; boundary=";
 
     private static final String BOUNDARY_HEAD = "--";
 
-    private final Map<String, String[]> parameterMap = new HashMap<String, String[]>();
+    private final Map<String, String[]> parameterMap = new HashMap<>();
     private String boundary;
 
     /**
