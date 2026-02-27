@@ -18,12 +18,12 @@ package io.github.ghosthack.turismo.resolver;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
+import io.github.ghosthack.turismo.PathPattern;
 import io.github.ghosthack.turismo.servlet.Env;
 
 /**
@@ -32,22 +32,16 @@ import io.github.ghosthack.turismo.servlet.Env;
  */
 public class ListResolver extends MethodPathResolver {
     
-    private HashMap<String, List<ParsedEntry>> methodPathList;
+    private final Map<String, List<ParsedEntry>> methodPathList;
     private Runnable defaultRunnable;
-    private static final String SYMBOL_PREFIX = ":";
-    private static final String WILDCARD = "*";
     
     /**
-     * A parsed route entry that pre-computes path segments, parameter
-     * indexes, and wildcard indexes for efficient matching.
+     * A parsed route entry that delegates path matching to {@link PathPattern}.
      */
     public static class ParsedEntry {
         private final Runnable runnable;
         private final String path;
-        private final String[] parts;
-        private final Set<Integer> paramIndexes;
-        private final Set<Integer> wildcardIndexes;
-        private final Set<Entry<String, Integer>> params;
+        private final PathPattern pattern;
 
         /**
          * Creates a parsed entry for the given path.
@@ -56,31 +50,12 @@ public class ListResolver extends MethodPathResolver {
          * @param path     the URL path pattern
          */
         public ParsedEntry(Runnable runnable, String path) {
-            super();
-            if (path == null)
+            if (path == null) {
                 throw new IllegalArgumentException("path must not be null");
+            }
             this.runnable = runnable;
             this.path = path;
-            parts = path.split("/");
-            if (parts.length > 0) {
-                Map<String, Integer> paramMap = new HashMap<String, Integer>(parts.length);
-                paramIndexes = new HashSet<Integer>(parts.length);
-                wildcardIndexes = new HashSet<Integer>(parts.length);
-                for (int i = 0; i < parts.length; i++) {
-                    if (WILDCARD.equals(parts[i])) {
-                        wildcardIndexes.add(i);
-                    } else if (parts[i].startsWith(SYMBOL_PREFIX)) {
-                        String sub = parts[i].substring(1);
-                        paramMap.put(sub, i);
-                        paramIndexes.add(i);
-                    }
-                }
-                params = paramMap.entrySet();
-            } else {
-                paramIndexes = null;
-                wildcardIndexes = null;
-                params = null;
-            }
+            this.pattern = new PathPattern(path);
         }
 
         /**
@@ -90,9 +65,7 @@ public class ListResolver extends MethodPathResolver {
          * @return {@code true} if the segment is a parameter
          */
         public boolean isParam(int i) {
-            if (paramIndexes == null)
-                return false;
-            return paramIndexes.contains(i);
+            return pattern.isParam(i);
         }
 
         /**
@@ -102,9 +75,7 @@ public class ListResolver extends MethodPathResolver {
          * @return {@code true} if the segment is a wildcard
          */
         public boolean isWildcard(int i) {
-            if (wildcardIndexes == null)
-                return false;
-            return wildcardIndexes.contains(i);
+            return pattern.isWildcard(i);
         }
 
         /**
@@ -113,7 +84,7 @@ public class ListResolver extends MethodPathResolver {
          * @return the parameter entries
          */
         public Set<Entry<String, Integer>> getParams() {
-            return params;
+            return pattern.paramEntries();
         }
 
         /**
@@ -129,10 +100,10 @@ public class ListResolver extends MethodPathResolver {
         /**
          * Returns a copy of the path segments.
          *
-         * @return the path segments array, or {@code null}
+         * @return the path segments array
          */
         public String[] getParts() {
-            return parts != null ? parts.clone() : null;
+            return pattern.parts();
         }
 
         /**
@@ -156,7 +127,7 @@ public class ListResolver extends MethodPathResolver {
     
     /** Creates a new list-based resolver. */
     public ListResolver() {
-        methodPathList = new HashMap<String, List<ParsedEntry>>();
+        methodPathList = new HashMap<>();
     }
 
     /** 
@@ -188,7 +159,7 @@ public class ListResolver extends MethodPathResolver {
     public void route(String method, String path, Runnable runnable) {
         List<ParsedEntry> pathList = methodPathList.get(method);
         if(pathList == null) {
-            pathList = new ArrayList<ParsedEntry>();
+            pathList = new ArrayList<>();
             methodPathList.put(method, pathList);
         }
         ParsedEntry parsed = new ParsedEntry(runnable, path);
@@ -204,43 +175,14 @@ public class ListResolver extends MethodPathResolver {
     protected Runnable resolve(String method, String path) {
         List<ParsedEntry> pathList = methodPathList.get(method);
         if (pathList != null && path != null) {
-            // Split the request path once, outside the loop
-            final String[] requestParts = path.split("/");
+            String[] requestParts = path.split("/");
             for (ParsedEntry parsedEntry : pathList) {
-                String[] parts = parsedEntry.getParts();
-                if (parts == null) {
-                    if (parsedEntry.pathEquals(path)) {
-                        return parsedEntry.getRunnable();
+                Map<String, String> params = parsedEntry.pattern.match(requestParts);
+                if (params != null) {
+                    if (!params.isEmpty()) {
+                        Env.setResourceParams(params);
                     }
-                } else if (parts.length == requestParts.length) {
-                    boolean match = true;
-                    boolean hasParams = false;
-                    for (int i = 0; i < requestParts.length; i++) {
-                        if (parsedEntry.isWildcard(i)) {
-                            // skipped
-                        } else if (parsedEntry.isParam(i)) {
-                            // it's a resource "symbol"
-                            hasParams = true;
-                        } else if (parts[i].equals(requestParts[i])) {
-                            // exact match
-                        } else {
-                            // not a match
-                            match = false;
-                            break;
-                        }
-                    }
-                    if (match) {
-                        if (hasParams) {
-                            Map<String, String> params = new HashMap<String, String>();
-                            for (Map.Entry<String, Integer> paramsEntry : parsedEntry.getParams()) {
-                                String paramKey = paramsEntry.getKey();
-                                Integer paramPos = paramsEntry.getValue();
-                                params.put(paramKey, requestParts[paramPos]);
-                            }
-                            Env.setResourceParams(params);
-                        }
-                        return parsedEntry.getRunnable();
-                    }
+                    return parsedEntry.getRunnable();
                 }
             }
         }

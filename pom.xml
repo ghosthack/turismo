@@ -5,11 +5,11 @@
 
   <groupId>io.github.ghosthack</groupId>
   <artifactId>turismo</artifactId>
-  <version>3.0.0</version>
+  <version>3.1.0</version>
   <packaging>jar</packaging>
 
   <name>turismo</name>
-  <description>turismo web framework</description>
+  <description>A lightweight Sinatra/Express-style Java web framework</description>
   <url>https://github.com/ghosthack/turismo</url>
 
   <properties>
@@ -96,7 +96,7 @@
       <groupId>jakarta.servlet</groupId>
       <artifactId>jakarta.servlet-api</artifactId>
       <version>6.1.0</version>
-      <scope>provided</scope>
+      <optional>true</optional>
     </dependency>
     <dependency>
       <groupId>junit</groupId>

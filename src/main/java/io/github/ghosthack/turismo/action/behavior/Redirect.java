@@ -20,6 +20,7 @@ import java.io.IOException;
 
 import io.github.ghosthack.turismo.action.ActionException;
 import io.github.ghosthack.turismo.servlet.Env;
+import io.github.ghosthack.turismo.util.Validation;
 
 /**
  * Sends an HTTP redirect response via {@link jakarta.servlet.http.HttpServletResponse#sendRedirect}.
@@ -52,13 +53,7 @@ public class Redirect {
      * @throws IllegalArgumentException if location is null or contains CR/LF
      */
     static void validateLocation(String location) {
-        if (location == null) {
-            throw new IllegalArgumentException("Location must not be null");
-        }
-        if (location.indexOf('\r') >= 0 || location.indexOf('\n') >= 0) {
-            throw new IllegalArgumentException(
-                    "Location must not contain CR or LF characters (possible header injection)");
-        }
+        Validation.validateLocation(location);
     }
 
 }

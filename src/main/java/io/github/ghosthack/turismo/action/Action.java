@@ -34,6 +34,13 @@ import io.github.ghosthack.turismo.servlet.Env;
  */
 public abstract class Action implements Runnable {
 
+    private static final Alias ALIAS = new Alias();
+    private static final MovedPermanently MOVED_PERMANENTLY = new MovedPermanently();
+    private static final MovedTemporarily MOVED_TEMPORARILY = new MovedTemporarily();
+    private static final NotFound NOT_FOUND = new NotFound();
+    private static final Redirect REDIRECT = new Redirect();
+    private static final StringPrinter STRING_PRINTER = new StringPrinter();
+
     /** Default constructor. */
     protected Action() {
     }
@@ -90,7 +97,7 @@ public abstract class Action implements Runnable {
      * @param target the target path
      */
     protected void forward(String target) {
-        new Alias().forward(target);
+        ALIAS.forward(target);
     }
 
     /**
@@ -108,7 +115,7 @@ public abstract class Action implements Runnable {
      * @param newLocation the redirect URL
      */
     protected void movedPermanently(String newLocation) {
-        new MovedPermanently().send301(newLocation);
+        MOVED_PERMANENTLY.send301(newLocation);
     }
 
     /**
@@ -117,14 +124,14 @@ public abstract class Action implements Runnable {
      * @param newLocation the redirect URL
      */
     protected void movedTemporarily(String newLocation) {
-        new MovedTemporarily().send302(newLocation);
+        MOVED_TEMPORARILY.send302(newLocation);
     }
 
     /**
      * Sends an HTTP 404 (Not Found) response.
      */
     protected void notFound() {
-        new NotFound().send404();
+        NOT_FOUND.send404();
     }
 
     /**
@@ -133,7 +140,7 @@ public abstract class Action implements Runnable {
      * @param newLocation the redirect URL
      */
     protected void redirect(String newLocation) {
-        new Redirect().redirect(newLocation);
+        REDIRECT.redirect(newLocation);
     }
 
     /**
@@ -142,7 +149,7 @@ public abstract class Action implements Runnable {
      * @param string the string to write
      */
     protected void print(String string) {
-        new StringPrinter().print(string);
+        STRING_PRINTER.print(string);
     }
 
 }

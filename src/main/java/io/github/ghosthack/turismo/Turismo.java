@@ -18,17 +18,15 @@ package io.github.ghosthack.turismo;
 
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import io.github.ghosthack.turismo.http.Server;
+import io.github.ghosthack.turismo.util.Validation;
 
 /**
  * Static facade for the turismo web framework. Provides a zero-dependency,
@@ -85,13 +83,34 @@ public final class Turismo {
     }
 
     /**
-     * Registers a POST route.
+     * Registers a GET route that returns a fixed string body.
+     *
+     * @param path the URL path pattern
+     * @param body the response body text
+     */
+    public static void get(String path, String body) {
+        route("GET", path, () -> print(body));
+    }
+
+    /**
+     * Registers a POST route. The default status code is 201 (Created).
      *
      * @param path   the URL path pattern
      * @param action the action to execute
      */
     public static void post(String path, Runnable action) {
-        route("POST", path, action);
+        route("POST", path, () -> { status(201); action.run(); });
+    }
+
+    /**
+     * Registers a POST route that returns a fixed string body.
+     * The default status code is 201 (Created).
+     *
+     * @param path the URL path pattern
+     * @param body the response body text
+     */
+    public static void post(String path, String body) {
+        route("POST", path, () -> { status(201); print(body); });
     }
 
     /**
@@ -105,6 +124,16 @@ public final class Turismo {
     }
 
     /**
+     * Registers a PUT route that returns a fixed string body.
+     *
+     * @param path the URL path pattern
+     * @param body the response body text
+     */
+    public static void put(String path, String body) {
+        route("PUT", path, () -> print(body));
+    }
+
+    /**
      * Registers a DELETE route.
      *
      * @param path   the URL path pattern
@@ -115,6 +144,16 @@ public final class Turismo {
     }
 
     /**
+     * Registers a DELETE route that returns a fixed string body.
+     *
+     * @param path the URL path pattern
+     * @param body the response body text
+     */
+    public static void delete(String path, String body) {
+        route("DELETE", path, () -> print(body));
+    }
+
+    /**
      * Registers a PATCH route.
      *
      * @param path   the URL path pattern
@@ -122,6 +161,16 @@ public final class Turismo {
      */
     public static void patch(String path, Runnable action) {
         route("PATCH", path, action);
+    }
+
+    /**
+     * Registers a PATCH route that returns a fixed string body.
+     *
+     * @param path the URL path pattern
+     * @param body the response body text
+     */
+    public static void patch(String path, String body) {
+        route("PATCH", path, () -> print(body));
     }
 
     /**
@@ -311,12 +360,190 @@ public final class Turismo {
     }
 
     /**
+     * Writes multiple strings to the response body. Avoids string
+     * concatenation when building output from multiple parts.
+     *
+     * @param parts the text parts to write
+     */
+    public static void print(String... parts) {
+        Context ctx = context();
+        for (String part : parts) {
+            ctx.print(part);
+        }
+    }
+
+    /**
      * Returns the response output stream for writing binary data.
      *
      * @return the output stream
      */
     public static OutputStream output() {
         return context().output();
+    }
+
+    // ---------------------------------------------------------------
+    // JSON
+    // ---------------------------------------------------------------
+
+    /**
+     * Sets the Content-Type to {@code application/json} and writes
+     * the given object as JSON to the response body. Supports
+     * {@link Map}, {@link Iterable}, arrays, {@link String},
+     * {@link Number}, {@link Boolean}, and {@code null}.
+     *
+     * @param obj the object to serialize
+     */
+    public static void json(Object obj) {
+        type("application/json");
+        print(toJson(obj));
+    }
+
+    /**
+     * Serializes an object to a JSON string. Supports {@link Map},
+     * {@link Iterable}, arrays, {@link String}, {@link Number},
+     * {@link Boolean}, and {@code null}.
+     *
+     * @param obj the object to serialize
+     * @return the JSON string
+     * @throws IllegalArgumentException if the object type is not supported
+     */
+    public static String toJson(Object obj) {
+        if (obj == null) {
+            return "null";
+        }
+        if (obj instanceof String) {
+            return jsonString((String) obj);
+        }
+        if (obj instanceof Number || obj instanceof Boolean) {
+            return obj.toString();
+        }
+        if (obj instanceof Map<?, ?>) {
+            return jsonMap((Map<?, ?>) obj);
+        }
+        if (obj instanceof Iterable<?>) {
+            return jsonIterable((Iterable<?>) obj);
+        }
+        if (obj.getClass().isArray()) {
+            return jsonArray(obj);
+        }
+        throw new IllegalArgumentException(
+                "Unsupported type: " + obj.getClass().getName());
+    }
+
+    private static String jsonString(String s) {
+        StringBuilder sb = new StringBuilder(s.length() + 2);
+        sb.append('"');
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '"':  sb.append("\\\""); break;
+                case '\\': sb.append("\\\\"); break;
+                case '\b': sb.append("\\b");  break;
+                case '\f': sb.append("\\f");  break;
+                case '\n': sb.append("\\n");  break;
+                case '\r': sb.append("\\r");  break;
+                case '\t': sb.append("\\t");  break;
+                default:
+                    if (c < 0x20) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+            }
+        }
+        sb.append('"');
+        return sb.toString();
+    }
+
+    private static String jsonMap(Map<?, ?> map) {
+        StringBuilder sb = new StringBuilder();
+        sb.append('{');
+        Iterator<? extends Map.Entry<?, ?>> it = map.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<?, ?> entry = it.next();
+            sb.append(toJson(String.valueOf(entry.getKey())));
+            sb.append(':');
+            sb.append(toJson(entry.getValue()));
+            if (it.hasNext()) {
+                sb.append(',');
+            }
+        }
+        sb.append('}');
+        return sb.toString();
+    }
+
+    private static String jsonIterable(Iterable<?> iter) {
+        StringBuilder sb = new StringBuilder();
+        sb.append('[');
+        Iterator<?> it = iter.iterator();
+        while (it.hasNext()) {
+            sb.append(toJson(it.next()));
+            if (it.hasNext()) {
+                sb.append(',');
+            }
+        }
+        sb.append(']');
+        return sb.toString();
+    }
+
+    private static String jsonArray(Object arr) {
+        if (arr instanceof Object[]) {
+            Object[] a = (Object[]) arr;
+            StringBuilder sb = new StringBuilder();
+            sb.append('[');
+            for (int i = 0; i < a.length; i++) {
+                if (i > 0) sb.append(',');
+                sb.append(toJson(a[i]));
+            }
+            sb.append(']');
+            return sb.toString();
+        }
+        if (arr instanceof int[]) {
+            int[] a = (int[]) arr;
+            StringBuilder sb = new StringBuilder();
+            sb.append('[');
+            for (int i = 0; i < a.length; i++) {
+                if (i > 0) sb.append(',');
+                sb.append(a[i]);
+            }
+            sb.append(']');
+            return sb.toString();
+        }
+        if (arr instanceof long[]) {
+            long[] a = (long[]) arr;
+            StringBuilder sb = new StringBuilder();
+            sb.append('[');
+            for (int i = 0; i < a.length; i++) {
+                if (i > 0) sb.append(',');
+                sb.append(a[i]);
+            }
+            sb.append(']');
+            return sb.toString();
+        }
+        if (arr instanceof double[]) {
+            double[] a = (double[]) arr;
+            StringBuilder sb = new StringBuilder();
+            sb.append('[');
+            for (int i = 0; i < a.length; i++) {
+                if (i > 0) sb.append(',');
+                sb.append(a[i]);
+            }
+            sb.append(']');
+            return sb.toString();
+        }
+        if (arr instanceof boolean[]) {
+            boolean[] a = (boolean[]) arr;
+            StringBuilder sb = new StringBuilder();
+            sb.append('[');
+            for (int i = 0; i < a.length; i++) {
+                if (i > 0) sb.append(',');
+                sb.append(a[i]);
+            }
+            sb.append(']');
+            return sb.toString();
+        }
+        throw new IllegalArgumentException(
+                "Unsupported array type: " + arr.getClass().getName());
     }
 
     /**
@@ -465,7 +692,7 @@ public final class Turismo {
                 if (!pr.method.equals(method)) {
                     continue;
                 }
-                Map<String, String> params = pr.match(requestParts);
+                Map<String, String> params = pr.pattern.match(requestParts);
                 if (params != null) {
                     return new RouteMatch(pr.action, params);
                 }
@@ -481,15 +708,7 @@ public final class Turismo {
     }
 
     static void validateLocation(String url) {
-        if (url == null) {
-            throw new IllegalArgumentException(
-                    "Location must not be null");
-        }
-        if (url.indexOf('\r') >= 0 || url.indexOf('\n') >= 0) {
-            throw new IllegalArgumentException(
-                    "Location must not contain CR or LF characters "
-                    + "(possible header injection)");
-        }
+        Validation.validateLocation(url);
     }
 
     // ---------------------------------------------------------------
@@ -509,59 +728,17 @@ public final class Turismo {
 
     /**
      * A route pattern that supports named parameters ({@code :name})
-     * and wildcards ({@code *}).
+     * and wildcards ({@code *}). Delegates to {@link PathPattern}.
      */
     static class PatternRoute {
         final String method;
-        final String[] parts;
-        final Map<String, Integer> paramNames;
-        final Set<Integer> paramPositions;
-        final Set<Integer> wildcardPositions;
+        final PathPattern pattern;
         final Runnable action;
 
         PatternRoute(String method, String path, Runnable action) {
             this.method = method;
+            this.pattern = new PathPattern(path);
             this.action = action;
-            this.parts = path.split("/");
-            this.paramNames = new HashMap<>();
-            this.paramPositions = new HashSet<>();
-            this.wildcardPositions = new HashSet<>();
-            for (int i = 0; i < parts.length; i++) {
-                if ("*".equals(parts[i])) {
-                    wildcardPositions.add(i);
-                } else if (parts[i].startsWith(":")) {
-                    paramNames.put(parts[i].substring(1), i);
-                    paramPositions.add(i);
-                }
-            }
-        }
-
-        /**
-         * Attempts to match the given request path segments against
-         * this pattern. Returns extracted parameters on match, or
-         * {@code null} if no match.
-         */
-        Map<String, String> match(String[] requestParts) {
-            if (requestParts.length != parts.length) {
-                return null;
-            }
-            for (int i = 0; i < parts.length; i++) {
-                if (wildcardPositions.contains(i)
-                        || paramPositions.contains(i)) {
-                    continue;
-                }
-                if (!parts[i].equals(requestParts[i])) {
-                    return null;
-                }
-            }
-            if (paramNames.isEmpty()) {
-                return Collections.emptyMap();
-            }
-            Map<String, String> params = new HashMap<>();
-            for (Map.Entry<String, Integer> entry : paramNames.entrySet()) {
-                params.put(entry.getKey(), requestParts[entry.getValue()]);
-            }
-            return params;
         }
     }
 }

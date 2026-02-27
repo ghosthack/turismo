@@ -10,14 +10,14 @@ A lightweight Sinatra/Express-style Java web framework.
 <dependency>
     <groupId>io.github.ghosthack</groupId>
     <artifactId>turismo</artifactId>
-    <version>3.0.0</version>
+    <version>3.1.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'io.github.ghosthack:turismo:3.0.0'
+implementation 'io.github.ghosthack:turismo:3.1.0'
 ```
 
 Requires Java 17+.
@@ -27,15 +27,16 @@ Requires Java 17+.
 
 ## Quick start
 
-Zero dependencies — uses the JDK's built-in HTTP server:
+Zero dependencies -- uses the JDK's built-in HTTP server:
 
 ```java
 import static io.github.ghosthack.turismo.Turismo.*;
 
 public class App {
     public static void main(String[] args) {
-        get("/hello", () -> print("Hello World!"));
-        get("/users/:id", () -> print("User " + param("id")));
+        get("/hello", "Hello World!");
+        get("/users/:id", () -> print("User ", param("id")));
+        post("/users", () -> json(Map.of("created", true)));
         start(8080);
     }
 }
@@ -46,8 +47,8 @@ public class App {
 ### Exact paths
 
 ```java
-get("/hello", () -> print("Hello!"));
-post("/submit", () -> { status(201); print("Created"); });
+get("/hello", "Hello!");
+post("/submit", () -> print("Created")); // defaults to 201
 ```
 
 ### Named parameters
@@ -82,9 +83,11 @@ get("/search", () -> {
 
 All standard methods: `get`, `post`, `put`, `delete`, `patch`, `head`, `options`.
 
+POST routes default to status 201 (Created):
+
 ```java
-post("/data", () -> { status(201); print("created"); });
-delete("/users/:id", () -> print("Deleted " + param("id")));
+post("/data", () -> print("created"));        // 201
+delete("/users/:id", () -> print("Deleted ", param("id")));
 ```
 
 ## Response helpers
@@ -99,6 +102,12 @@ type("application/json");
 
 // Write body
 print("Hello World");
+print("Hello ", name, "!");  // varargs — avoids concatenation
+
+// JSON response (built-in serializer, no dependencies)
+json(Map.of("ok", true, "count", 42));
+json(List.of("a", "b", "c"));
+String s = toJson(Map.of("key", "value")); // serialize without writing
 
 // Redirects
 redirect("/new-location");       // 302
@@ -259,9 +268,8 @@ post("/upload", new Action() {
 
 1. Set the release version in `pom.xml` (remove `-SNAPSHOT`)
 2. Commit, push, and merge via PR
-3. CI detects the version change and creates a GitHub release automatically
-4. The release workflow deploys to Maven Central
-5. Publish the deployment at https://central.sonatype.com/publishing/deployments
+3. CI detects the version change, creates a GitHub release, and deploys to Maven Central
+4. Publish the deployment at https://central.sonatype.com/publishing/deployments
 
 ## License
 
