@@ -16,6 +16,12 @@ import java.util.Map;
 import org.junit.After;
 import org.junit.Test;
 
+import io.github.ghosthack.turismo.annotation.DELETE;
+import io.github.ghosthack.turismo.annotation.GET;
+import io.github.ghosthack.turismo.annotation.PATCH;
+import io.github.ghosthack.turismo.annotation.POST;
+import io.github.ghosthack.turismo.annotation.PUT;
+
 public class TurismoTest {
 
     @After
@@ -520,6 +526,135 @@ public class TurismoTest {
     public void testPathPatternSegmentMismatch() {
         PathPattern p = new PathPattern("/a/b");
         assertNull(p.match("/a/b/c".split("/")));
+    }
+
+    // ---------------------------------------------------------------
+    // Annotation-based controller registration
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testControllerGet() {
+        MockContext ctx = new MockContext("GET", "/ctrl/hello");
+        Turismo.controller(new TestController());
+
+        Turismo.handle(ctx);
+        assertEquals("hello", ctx.printed.toString());
+    }
+
+    @Test
+    public void testControllerGetWithParam() {
+        MockContext ctx = new MockContext("GET", "/ctrl/users/42");
+        Turismo.controller(new TestController());
+
+        Turismo.handle(ctx);
+        assertEquals("user=42", ctx.printed.toString());
+    }
+
+    @Test
+    public void testControllerPostDefaultStatus201() {
+        MockContext ctx = new MockContext("POST", "/ctrl/items");
+        Turismo.controller(new TestController());
+
+        Turismo.handle(ctx);
+        assertEquals(201, ctx.statusCode);
+        assertEquals("created", ctx.printed.toString());
+    }
+
+    @Test
+    public void testControllerPut() {
+        MockContext ctx = new MockContext("PUT", "/ctrl/items");
+        Turismo.controller(new TestController());
+
+        Turismo.handle(ctx);
+        assertEquals("updated", ctx.printed.toString());
+    }
+
+    @Test
+    public void testControllerDelete() {
+        MockContext ctx = new MockContext("DELETE", "/ctrl/items");
+        Turismo.controller(new TestController());
+
+        Turismo.handle(ctx);
+        assertEquals("deleted", ctx.printed.toString());
+    }
+
+    @Test
+    public void testControllerPatch() {
+        MockContext ctx = new MockContext("PATCH", "/ctrl/items");
+        Turismo.controller(new TestController());
+
+        Turismo.handle(ctx);
+        assertEquals("patched", ctx.printed.toString());
+    }
+
+    @Test
+    public void testControllerMixedWithLambdaRoutes() {
+        MockContext ctxGet = new MockContext("GET", "/lambda");
+        MockContext ctxCtrl = new MockContext("GET", "/ctrl/hello");
+        Turismo.get("/lambda", "from-lambda");
+        Turismo.controller(new TestController());
+
+        Turismo.handle(ctxGet);
+        assertEquals("from-lambda", ctxGet.printed.toString());
+
+        Turismo.handle(ctxCtrl);
+        assertEquals("hello", ctxCtrl.printed.toString());
+    }
+
+    @Test
+    public void testControllerRuntimeExceptionPropagated() {
+        MockContext ctx = new MockContext("GET", "/ctrl/error");
+        Turismo.controller(new TestController());
+
+        try {
+            Turismo.handle(ctx);
+            fail("Expected RuntimeException");
+        } catch (RuntimeException e) {
+            assertEquals("test error", e.getMessage());
+        }
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testControllerNoAnnotationsThrows() {
+        Turismo.controller(new Object());
+    }
+
+    /** Test controller used by annotation tests. */
+    static class TestController {
+        @GET("/ctrl/hello")
+        void hello() {
+            Turismo.print("hello");
+        }
+
+        @GET("/ctrl/users/:id")
+        void getUser() {
+            Turismo.print("user=", Turismo.param("id"));
+        }
+
+        @POST("/ctrl/items")
+        void createItem() {
+            Turismo.print("created");
+        }
+
+        @PUT("/ctrl/items")
+        void updateItem() {
+            Turismo.print("updated");
+        }
+
+        @DELETE("/ctrl/items")
+        void deleteItem() {
+            Turismo.print("deleted");
+        }
+
+        @PATCH("/ctrl/items")
+        void patchItem() {
+            Turismo.print("patched");
+        }
+
+        @GET("/ctrl/error")
+        void error() {
+            throw new RuntimeException("test error");
+        }
     }
 
     // ---------------------------------------------------------------

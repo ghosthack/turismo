@@ -18,6 +18,9 @@ package io.github.ghosthack.turismo;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.annotation.Annotation;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -25,6 +28,11 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import io.github.ghosthack.turismo.annotation.DELETE;
+import io.github.ghosthack.turismo.annotation.GET;
+import io.github.ghosthack.turismo.annotation.PATCH;
+import io.github.ghosthack.turismo.annotation.POST;
+import io.github.ghosthack.turismo.annotation.PUT;
 import io.github.ghosthack.turismo.http.Server;
 import io.github.ghosthack.turismo.util.Validation;
 
@@ -218,6 +226,85 @@ public final class Turismo {
             EXACT.computeIfAbsent(method, k -> new ConcurrentHashMap<>())
                  .put(path, action);
         }
+    }
+
+    // ---------------------------------------------------------------
+    // Controller registration
+    // ---------------------------------------------------------------
+
+    /**
+     * Registers an annotated controller instance. Scans the instance's
+     * class for methods annotated with {@link GET @GET}, {@link POST @POST},
+     * {@link PUT @PUT}, {@link DELETE @DELETE}, or {@link PATCH @PATCH},
+     * and registers each as a route.
+     *
+     * <pre>{@code
+     * public class MyController {
+     *     @GET("/hello")
+     *     void hello() {
+     *         print("Hello!");
+     *     }
+     * }
+     *
+     * Turismo.controller(new MyController());
+     * }</pre>
+     *
+     * @param instance the controller instance
+     * @throws IllegalArgumentException if the instance has no annotated methods
+     */
+    public static void controller(Object instance) {
+        int count = 0;
+        for (Method m : instance.getClass().getDeclaredMethods()) {
+            String httpMethod = null;
+            String path = null;
+            for (Annotation a : m.getDeclaredAnnotations()) {
+                if (a instanceof GET g) {
+                    httpMethod = "GET"; path = g.value();
+                } else if (a instanceof POST p) {
+                    httpMethod = "POST"; path = p.value();
+                } else if (a instanceof PUT p) {
+                    httpMethod = "PUT"; path = p.value();
+                } else if (a instanceof DELETE d) {
+                    httpMethod = "DELETE"; path = d.value();
+                } else if (a instanceof PATCH p) {
+                    httpMethod = "PATCH"; path = p.value();
+                }
+            }
+            if (httpMethod != null) {
+                m.setAccessible(true);
+                Runnable action = toAction(instance, m);
+                if ("POST".equals(httpMethod)) {
+                    route(httpMethod, path, () -> { status(201); action.run(); });
+                } else {
+                    route(httpMethod, path, action);
+                }
+                count++;
+            }
+        }
+        if (count == 0) {
+            throw new IllegalArgumentException(
+                    "No annotated routes found in "
+                    + instance.getClass().getName());
+        }
+    }
+
+    private static Runnable toAction(Object instance, Method method) {
+        return () -> {
+            try {
+                method.invoke(instance);
+            } catch (InvocationTargetException e) {
+                Throwable cause = e.getCause();
+                if (cause instanceof RuntimeException re) {
+                    throw re;
+                }
+                if (cause instanceof Error err) {
+                    throw err;
+                }
+                throw new RuntimeException(cause);
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
+            }
+        };
     }
 
     // ---------------------------------------------------------------
