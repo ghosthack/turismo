@@ -10,14 +10,14 @@ A lightweight Sinatra/Express-style Java web framework.
 <dependency>
     <groupId>io.github.ghosthack</groupId>
     <artifactId>turismo</artifactId>
-    <version>3.1.0</version>
+    <version>3.2.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'io.github.ghosthack:turismo:3.1.0'
+implementation 'io.github.ghosthack:turismo:3.2.0'
 ```
 
 Requires Java 17+.
@@ -138,6 +138,49 @@ get("/echo", () -> {
     InputStream body = body();           // request body
 });
 ```
+
+## Controller mode
+
+Routes can also be defined as annotated methods on a controller class:
+
+```java
+import static io.github.ghosthack.turismo.Turismo.*;
+import io.github.ghosthack.turismo.annotation.*;
+
+public class UserController {
+
+    @GET("/hello")
+    void hello() {
+        print("Hello World!");
+    }
+
+    @GET("/users/:id")
+    void getUser() {
+        print("User ", param("id"));
+    }
+
+    @POST("/users")
+    void createUser() {
+        json(Map.of("created", true));
+    }
+
+    @DELETE("/users/:id")
+    void deleteUser() {
+        print("Deleted ", param("id"));
+    }
+}
+```
+
+Register the controller and start the server:
+
+```java
+controller(new UserController());
+start(8080);
+```
+
+Controller routes use the same routing engine as lambda routes and can be
+freely mixed. All request/response methods (`param()`, `print()`, `json()`,
+etc.) work the same way inside annotated methods.
 
 ## Servlet deployment
 
