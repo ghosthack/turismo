@@ -15,7 +15,7 @@ jobs:
         java-version: [ 17, 21 ]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up JDK ${{ matrix.java-version }}
         uses: actions/setup-java@v5
@@ -36,7 +36,7 @@ jobs:
       changed: ${{ steps.version.outputs.changed }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 2
 
@@ -70,7 +70,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
