@@ -10,17 +10,17 @@ A lightweight Sinatra/Express-style Java web framework.
 <dependency>
     <groupId>io.github.ghosthack</groupId>
     <artifactId>turismo</artifactId>
-    <version>3.2.1</version>
+    <version>4.0.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'io.github.ghosthack:turismo:3.2.1'
+implementation 'io.github.ghosthack:turismo:4.0.0'
 ```
 
-Requires Java 21+.
+Requires Java 21+. (3.x supports Java 17.)
 
 > **Note:** Versions 1.x were published under `com.ghosthack:turismo`. The groupId changed to
 > `io.github.ghosthack` starting with 2.0.0.
