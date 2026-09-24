@@ -18,10 +18,8 @@ package io.github.ghosthack.turismo.http;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -49,22 +47,15 @@ import io.github.ghosthack.turismo.Turismo;
  * server.stop();
  * }</pre>
  *
- * <p>Requests are handled concurrently on a pool of worker threads
- * ({@value #DEFAULT_THREADS} by default, see {@link #Server(int, int)}),
- * so a slow handler does not block other requests.
+ * <p>Each request is handled on its own virtual thread, so a slow or
+ * blocking handler does not hold up other requests.
  *
  * @see Turismo#start(int)
  */
 public class Server {
 
-    /** Default number of concurrent request-handling threads. */
-    public static final int DEFAULT_THREADS = 100;
-
-    private static final long IDLE_SECONDS = 60;
-    private static final AtomicInteger POOL_ID = new AtomicInteger();
-
     private final HttpServer server;
-    private final ThreadPoolExecutor executor;
+    private final ExecutorService executor;
 
     /**
      * Creates a server bound to the given port.
@@ -73,39 +64,11 @@ public class Server {
      * @throws IOException if the server socket cannot be created
      */
     public Server(int port) throws IOException {
-        this(port, DEFAULT_THREADS);
-    }
-
-    /**
-     * Creates a server bound to the given port, handling up to
-     * {@code threads} requests concurrently. Further requests queue
-     * until a worker is free.
-     *
-     * @param port    the port to listen on (use 0 for a random available port)
-     * @param threads the number of worker threads, must be positive
-     * @throws IOException if the server socket cannot be created
-     * @throws IllegalArgumentException if {@code threads} is not positive
-     */
-    public Server(int port, int threads) throws IOException {
-        if (threads <= 0) {
-            throw new IllegalArgumentException(
-                    "threads must be positive, was: " + threads);
-        }
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         this.server.createContext("/", this::handle);
-        this.executor = newExecutor(threads);
+        this.executor = Executors.newThreadPerTaskExecutor(
+                Thread.ofVirtual().name("turismo-", 0).factory());
         this.server.setExecutor(executor);
-    }
-
-    private static ThreadPoolExecutor newExecutor(int threads) {
-        String prefix = "turismo-" + POOL_ID.incrementAndGet() + "-worker-";
-        AtomicInteger threadId = new AtomicInteger();
-        ThreadPoolExecutor pool = new ThreadPoolExecutor(
-                threads, threads, IDLE_SECONDS, TimeUnit.SECONDS,
-                new LinkedBlockingQueue<>(),
-                r -> new Thread(r, prefix + threadId.incrementAndGet()));
-        pool.allowCoreThreadTimeOut(true);
-        return pool;
     }
 
     /**

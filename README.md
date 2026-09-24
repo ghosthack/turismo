@@ -20,7 +20,7 @@ Gradle:
 implementation 'io.github.ghosthack:turismo:3.2.1'
 ```
 
-Requires Java 17+.
+Requires Java 21+.
 
 > **Note:** Versions 1.x were published under `com.ghosthack:turismo`. The groupId changed to
 > `io.github.ghosthack` starting with 2.0.0.
@@ -187,13 +187,9 @@ etc.) work the same way inside annotated methods.
 
 ## Concurrency
 
-The embedded server handles requests on a pool of 100 worker threads by
-default; further requests wait until a worker is free. To change the pool
-size:
-
-```java
-start(8080, 200); // up to 200 concurrent requests
-```
+The embedded server handles each request on its own virtual thread, so
+handlers can block (database calls, outbound HTTP, `Thread.sleep`) without
+holding up other requests.
 
 ## Servlet deployment
 
