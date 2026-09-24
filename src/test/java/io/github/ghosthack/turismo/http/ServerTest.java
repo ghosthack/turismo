@@ -220,6 +220,102 @@ public class ServerTest {
     }
 
     @Test
+    public void testHeadServedByGetRouteWithoutBody() throws Exception {
+        Turismo.get("/hello", () -> {
+            Turismo.type("text/plain");
+            Turismo.print("Hello World");
+        });
+        Server server = startServer();
+        try {
+            HttpURLConnection conn = (HttpURLConnection) URI.create(
+                    "http://localhost:" + server.port() + "/hello")
+                    .toURL().openConnection();
+            conn.setRequestMethod("HEAD");
+            assertEquals(200, conn.getResponseCode());
+            assertEquals("text/plain", conn.getHeaderField("Content-Type"));
+            assertEquals(0, conn.getInputStream().readAllBytes().length);
+            conn.disconnect();
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test
+    public void testNoContentStatusSendsNoBody() throws Exception {
+        Turismo.delete("/item", () -> {
+            Turismo.status(204);
+            Turismo.print("ignored");
+        });
+        Server server = startServer();
+        try {
+            HttpResult result = fetch("DELETE",
+                    "http://localhost:" + server.port() + "/item");
+            assertEquals(204, result.status);
+            assertEquals("", result.body);
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test
+    public void testServerErrorDiscardsHandlerHeaders() throws Exception {
+        Turismo.get("/half", () -> {
+            Turismo.type("application/json");
+            Turismo.header("X-Partial", "yes");
+            Turismo.print("{");
+            throw new IllegalStateException("fail midway");
+        });
+        Server server = startServer();
+        try {
+            HttpURLConnection conn = (HttpURLConnection) URI.create(
+                    "http://localhost:" + server.port() + "/half")
+                    .toURL().openConnection();
+            assertEquals(500, conn.getResponseCode());
+            assertNull(conn.getHeaderField("X-Partial"));
+            assertNotEquals("application/json",
+                    conn.getHeaderField("Content-Type"));
+            assertEquals("Internal Server Error", new String(
+                    conn.getErrorStream().readAllBytes(),
+                    StandardCharsets.UTF_8));
+            conn.disconnect();
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test
+    public void testEncodedSlashInPathParam() throws Exception {
+        Turismo.get("/files/:name", () ->
+                Turismo.print("name=" + Turismo.param("name")));
+        Server server = startServer();
+        try {
+            HttpResult result = fetch("GET",
+                    "http://localhost:" + server.port() + "/files/a%2Fb");
+            assertEquals(200, result.status);
+            assertEquals("name=a/b", result.body);
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test
+    public void testMethodNotAllowed() throws Exception {
+        Turismo.get("/only-get", "x");
+        Server server = startServer();
+        try {
+            HttpURLConnection conn = (HttpURLConnection) URI.create(
+                    "http://localhost:" + server.port() + "/only-get")
+                    .toURL().openConnection();
+            conn.setRequestMethod("DELETE");
+            assertEquals(405, conn.getResponseCode());
+            assertEquals("GET, HEAD", conn.getHeaderField("Allow"));
+            conn.disconnect();
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test
     public void testRandomPort() throws Exception {
         Server server = new Server(0);
         server.start();

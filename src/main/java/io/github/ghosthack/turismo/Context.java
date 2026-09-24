@@ -49,6 +49,18 @@ public interface Context {
     String path();
 
     /**
+     * Returns the request path before percent-decoding, if the transport
+     * provides it. When available, route patterns are matched against
+     * its segments, each decoded on its own, so an encoded {@code /}
+     * ({@code %2F}) stays inside a single path parameter.
+     *
+     * @return the raw request path, or {@code null} if not available
+     */
+    default String rawPath() {
+        return null;
+    }
+
+    /**
      * Returns a query string parameter value by name.
      *
      * @param name the parameter name

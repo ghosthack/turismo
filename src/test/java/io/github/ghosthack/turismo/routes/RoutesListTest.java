@@ -157,4 +157,32 @@ public class RoutesListTest {
         routes.getResolver().resolve().run();
         verify(res).setStatus(HttpServletResponse.SC_NOT_FOUND);
     }
+
+    @Test
+    public void testFailedMapIsNotRetried() {
+        final int[] calls = { 0 };
+        RoutesList broken = new RoutesList() {
+            @Override
+            protected void map() {
+                calls[0]++;
+                get("/", () -> {});
+                throw new IllegalStateException("broken map");
+            }
+        };
+        try {
+            broken.getResolver();
+            org.junit.Assert.fail("Expected IllegalStateException");
+        } catch (IllegalStateException e) {
+            assertEquals("broken map", e.getMessage());
+        }
+        try {
+            broken.getResolver();
+            org.junit.Assert.fail("Expected IllegalStateException");
+        } catch (IllegalStateException e) {
+            assertEquals("Route initialization failed", e.getMessage());
+            assertEquals("broken map", e.getCause().getMessage());
+        }
+        assertEquals(1, calls[0]);
+    }
+
 }
