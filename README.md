@@ -10,14 +10,14 @@ A lightweight Sinatra/Express-style Java web framework.
 <dependency>
     <groupId>io.github.ghosthack</groupId>
     <artifactId>turismo</artifactId>
-    <version>3.2.0</version>
+    <version>3.2.1</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'io.github.ghosthack:turismo:3.2.0'
+implementation 'io.github.ghosthack:turismo:3.2.1'
 ```
 
 Requires Java 17+.
