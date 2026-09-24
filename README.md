@@ -185,6 +185,16 @@ Controller routes use the same routing engine as lambda routes and can be
 freely mixed. All request/response methods (`param()`, `print()`, `json()`,
 etc.) work the same way inside annotated methods.
 
+## Concurrency
+
+The embedded server handles requests on a pool of 10 worker threads by
+default; further requests wait until a worker is free. To change the pool
+size:
+
+```java
+start(8080, 50); // up to 50 concurrent requests
+```
+
 ## Servlet deployment
 
 turismo also supports deployment in any Jakarta EE 10 servlet container

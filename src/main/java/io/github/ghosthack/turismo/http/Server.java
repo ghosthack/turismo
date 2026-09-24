@@ -49,16 +49,16 @@ import io.github.ghosthack.turismo.Turismo;
  * server.stop();
  * }</pre>
  *
- * <p>Requests are handled concurrently on a pool of up to
- * {@value #MAX_THREADS} worker threads, so a slow handler does not
- * block other requests.
+ * <p>Requests are handled concurrently on a pool of worker threads
+ * ({@value #DEFAULT_THREADS} by default, see {@link #Server(int, int)}),
+ * so a slow handler does not block other requests.
  *
  * @see Turismo#start(int)
  */
 public class Server {
 
-    /** Maximum number of concurrent request-handling threads. */
-    public static final int MAX_THREADS = 200;
+    /** Default number of concurrent request-handling threads. */
+    public static final int DEFAULT_THREADS = 10;
 
     private static final long IDLE_SECONDS = 60;
     private static final AtomicInteger POOL_ID = new AtomicInteger();
@@ -73,17 +73,35 @@ public class Server {
      * @throws IOException if the server socket cannot be created
      */
     public Server(int port) throws IOException {
+        this(port, DEFAULT_THREADS);
+    }
+
+    /**
+     * Creates a server bound to the given port, handling up to
+     * {@code threads} requests concurrently. Further requests queue
+     * until a worker is free.
+     *
+     * @param port    the port to listen on (use 0 for a random available port)
+     * @param threads the number of worker threads, must be positive
+     * @throws IOException if the server socket cannot be created
+     * @throws IllegalArgumentException if {@code threads} is not positive
+     */
+    public Server(int port, int threads) throws IOException {
+        if (threads <= 0) {
+            throw new IllegalArgumentException(
+                    "threads must be positive, was: " + threads);
+        }
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         this.server.createContext("/", this::handle);
-        this.executor = newExecutor();
+        this.executor = newExecutor(threads);
         this.server.setExecutor(executor);
     }
 
-    private static ThreadPoolExecutor newExecutor() {
+    private static ThreadPoolExecutor newExecutor(int threads) {
         String prefix = "turismo-" + POOL_ID.incrementAndGet() + "-worker-";
         AtomicInteger threadId = new AtomicInteger();
         ThreadPoolExecutor pool = new ThreadPoolExecutor(
-                MAX_THREADS, MAX_THREADS, IDLE_SECONDS, TimeUnit.SECONDS,
+                threads, threads, IDLE_SECONDS, TimeUnit.SECONDS,
                 new LinkedBlockingQueue<>(),
                 r -> new Thread(r, prefix + threadId.incrementAndGet()));
         pool.allowCoreThreadTimeOut(true);
