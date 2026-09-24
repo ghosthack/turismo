@@ -7,6 +7,9 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.After;
 import org.junit.Test;
@@ -144,6 +147,60 @@ public class ServerTest {
                     "http://localhost:" + server.port() + "/boom");
             assertEquals(500, result.status);
             assertEquals("Internal Server Error", result.body);
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test
+    public void testServerErrorOnError() throws Exception {
+        Turismo.get("/overflow", () -> {
+            throw new StackOverflowError("test error");
+        });
+        Server server = startServer();
+        try {
+            HttpResult result = fetch("GET",
+                    "http://localhost:" + server.port() + "/overflow");
+            assertEquals(500, result.status);
+            assertEquals("Internal Server Error", result.body);
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test
+    public void testConcurrentRequests() throws Exception {
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch released = new CountDownLatch(1);
+        Turismo.get("/wait", () -> {
+            entered.countDown();
+            try {
+                boolean ok = released.await(5, TimeUnit.SECONDS);
+                Turismo.print(ok ? "released" : "timed out");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        Turismo.get("/release", () -> {
+            released.countDown();
+            Turismo.print("ok");
+        });
+        Server server = startServer();
+        try {
+            String base = "http://localhost:" + server.port();
+            CompletableFuture<HttpResult> waiting = CompletableFuture
+                    .supplyAsync(() -> {
+                        try {
+                            return fetch("GET", base + "/wait");
+                        } catch (Exception e) {
+                            throw new RuntimeException(e);
+                        }
+                    });
+            assertTrue(entered.await(5, TimeUnit.SECONDS));
+            // Served while /wait is still blocked in its handler
+            assertEquals("ok", fetch("GET", base + "/release").body);
+            assertEquals("released",
+                    waiting.get(10, TimeUnit.SECONDS).body);
         } finally {
             server.stop();
         }

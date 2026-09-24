@@ -18,6 +18,10 @@ package io.github.ghosthack.turismo.http;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -45,11 +49,22 @@ import io.github.ghosthack.turismo.Turismo;
  * server.stop();
  * }</pre>
  *
+ * <p>Requests are handled concurrently on a pool of up to
+ * {@value #MAX_THREADS} worker threads, so a slow handler does not
+ * block other requests.
+ *
  * @see Turismo#start(int)
  */
 public class Server {
 
+    /** Maximum number of concurrent request-handling threads. */
+    public static final int MAX_THREADS = 200;
+
+    private static final long IDLE_SECONDS = 60;
+    private static final AtomicInteger POOL_ID = new AtomicInteger();
+
     private final HttpServer server;
+    private final ThreadPoolExecutor executor;
 
     /**
      * Creates a server bound to the given port.
@@ -60,6 +75,19 @@ public class Server {
     public Server(int port) throws IOException {
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         this.server.createContext("/", this::handle);
+        this.executor = newExecutor();
+        this.server.setExecutor(executor);
+    }
+
+    private static ThreadPoolExecutor newExecutor() {
+        String prefix = "turismo-" + POOL_ID.incrementAndGet() + "-worker-";
+        AtomicInteger threadId = new AtomicInteger();
+        ThreadPoolExecutor pool = new ThreadPoolExecutor(
+                MAX_THREADS, MAX_THREADS, IDLE_SECONDS, TimeUnit.SECONDS,
+                new LinkedBlockingQueue<>(),
+                r -> new Thread(r, prefix + threadId.incrementAndGet()));
+        pool.allowCoreThreadTimeOut(true);
+        return pool;
     }
 
     /**
@@ -75,6 +103,7 @@ public class Server {
      */
     public void stop() {
         server.stop(0);
+        executor.shutdownNow();
     }
 
     /**
@@ -90,16 +119,19 @@ public class Server {
     private void handle(HttpExchange exchange) {
         HttpContext ctx = new HttpContext(exchange);
         try {
-            Turismo.handle(ctx);
-        } catch (Exception e) {
-            ctx.resetBuffer();
-            ctx.status(500);
-            ctx.print("Internal Server Error");
-        }
-        try {
+            try {
+                Turismo.handle(ctx);
+            } catch (Throwable t) {
+                // Catch Errors too, otherwise the client gets no response
+                ctx.resetBuffer();
+                ctx.status(500);
+                ctx.print("Internal Server Error");
+            }
             ctx.finish();
         } catch (IOException ignored) {
             // Client may have disconnected
+        } finally {
+            exchange.close();
         }
     }
 }
