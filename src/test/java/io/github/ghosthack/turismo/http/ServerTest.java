@@ -7,6 +7,9 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.After;
 import org.junit.Test;
@@ -144,6 +147,169 @@ public class ServerTest {
                     "http://localhost:" + server.port() + "/boom");
             assertEquals(500, result.status);
             assertEquals("Internal Server Error", result.body);
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test
+    public void testServerErrorOnError() throws Exception {
+        Turismo.get("/overflow", () -> {
+            throw new StackOverflowError("test error");
+        });
+        Server server = startServer();
+        try {
+            HttpResult result = fetch("GET",
+                    "http://localhost:" + server.port() + "/overflow");
+            assertEquals(500, result.status);
+            assertEquals("Internal Server Error", result.body);
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test
+    public void testConcurrentRequests() throws Exception {
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch released = new CountDownLatch(1);
+        Turismo.get("/wait", () -> {
+            entered.countDown();
+            try {
+                boolean ok = released.await(5, TimeUnit.SECONDS);
+                Turismo.print(ok ? "released" : "timed out");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        Turismo.get("/release", () -> {
+            released.countDown();
+            Turismo.print("ok");
+        });
+        Server server = startServer();
+        try {
+            String base = "http://localhost:" + server.port();
+            CompletableFuture<HttpResult> waiting = CompletableFuture
+                    .supplyAsync(() -> {
+                        try {
+                            return fetch("GET", base + "/wait");
+                        } catch (Exception e) {
+                            throw new RuntimeException(e);
+                        }
+                    });
+            assertTrue(entered.await(5, TimeUnit.SECONDS));
+            // Served while /wait is still blocked in its handler
+            assertEquals("ok", fetch("GET", base + "/release").body);
+            assertEquals("released",
+                    waiting.get(10, TimeUnit.SECONDS).body);
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test
+    public void testHandlesRequestsOnVirtualThreads() throws Exception {
+        Turismo.get("/thread", () ->
+                Turismo.print(String.valueOf(Thread.currentThread().isVirtual())));
+        Server server = startServer();
+        try {
+            assertEquals("true", fetch("GET",
+                    "http://localhost:" + server.port() + "/thread").body);
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test
+    public void testHeadServedByGetRouteWithoutBody() throws Exception {
+        Turismo.get("/hello", () -> {
+            Turismo.type("text/plain");
+            Turismo.print("Hello World");
+        });
+        Server server = startServer();
+        try {
+            HttpURLConnection conn = (HttpURLConnection) URI.create(
+                    "http://localhost:" + server.port() + "/hello")
+                    .toURL().openConnection();
+            conn.setRequestMethod("HEAD");
+            assertEquals(200, conn.getResponseCode());
+            assertEquals("text/plain", conn.getHeaderField("Content-Type"));
+            assertEquals(0, conn.getInputStream().readAllBytes().length);
+            conn.disconnect();
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test
+    public void testNoContentStatusSendsNoBody() throws Exception {
+        Turismo.delete("/item", () -> {
+            Turismo.status(204);
+            Turismo.print("ignored");
+        });
+        Server server = startServer();
+        try {
+            HttpResult result = fetch("DELETE",
+                    "http://localhost:" + server.port() + "/item");
+            assertEquals(204, result.status);
+            assertEquals("", result.body);
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test
+    public void testServerErrorDiscardsHandlerHeaders() throws Exception {
+        Turismo.get("/half", () -> {
+            Turismo.type("application/json");
+            Turismo.header("X-Partial", "yes");
+            Turismo.print("{");
+            throw new IllegalStateException("fail midway");
+        });
+        Server server = startServer();
+        try {
+            HttpURLConnection conn = (HttpURLConnection) URI.create(
+                    "http://localhost:" + server.port() + "/half")
+                    .toURL().openConnection();
+            assertEquals(500, conn.getResponseCode());
+            assertNull(conn.getHeaderField("X-Partial"));
+            assertNotEquals("application/json",
+                    conn.getHeaderField("Content-Type"));
+            assertEquals("Internal Server Error", new String(
+                    conn.getErrorStream().readAllBytes(),
+                    StandardCharsets.UTF_8));
+            conn.disconnect();
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test
+    public void testEncodedSlashInPathParam() throws Exception {
+        Turismo.get("/files/:name", () ->
+                Turismo.print("name=" + Turismo.param("name")));
+        Server server = startServer();
+        try {
+            HttpResult result = fetch("GET",
+                    "http://localhost:" + server.port() + "/files/a%2Fb");
+            assertEquals(200, result.status);
+            assertEquals("name=a/b", result.body);
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test
+    public void testMethodNotAllowed() throws Exception {
+        Turismo.get("/only-get", "x");
+        Server server = startServer();
+        try {
+            HttpURLConnection conn = (HttpURLConnection) URI.create(
+                    "http://localhost:" + server.port() + "/only-get")
+                    .toURL().openConnection();
+            conn.setRequestMethod("DELETE");
+            assertEquals(405, conn.getResponseCode());
+            assertEquals("GET, HEAD", conn.getHeaderField("Allow"));
+            conn.disconnect();
         } finally {
             server.stop();
         }

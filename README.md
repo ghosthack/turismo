@@ -10,17 +10,17 @@ A lightweight Sinatra/Express-style Java web framework.
 <dependency>
     <groupId>io.github.ghosthack</groupId>
     <artifactId>turismo</artifactId>
-    <version>3.2.1</version>
+    <version>4.0.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'io.github.ghosthack:turismo:3.2.1'
+implementation 'io.github.ghosthack:turismo:4.0.0'
 ```
 
-Requires Java 17+.
+Requires Java 21+. (3.x supports Java 17.)
 
 > **Note:** Versions 1.x were published under `com.ghosthack:turismo`. The groupId changed to
 > `io.github.ghosthack` starting with 2.0.0.
@@ -67,6 +67,9 @@ get("/users/:userId/posts/:postId", () -> {
 });
 ```
 
+Parameter values are percent-decoded, and an encoded slash stays inside its
+segment: `/files/a%2Fb` matches `/files/:name` with `name` = `a/b`.
+
 ### Wildcards
 
 ```java
@@ -85,6 +88,10 @@ get("/search", () -> {
 ## HTTP methods
 
 All standard methods: `get`, `post`, `put`, `delete`, `patch`, `head`, `options`.
+
+HEAD requests without a `head` route are served by the matching GET route,
+with the body discarded. A request whose path matches a route registered only
+for other methods gets `405 Method Not Allowed` with an `Allow` header.
 
 POST routes default to status 201 (Created):
 
@@ -110,6 +117,7 @@ print("Hello ", name, "!");  // varargs — avoids concatenation
 // JSON response (built-in serializer, no dependencies)
 json(Map.of("ok", true, "count", 42));
 json(List.of("a", "b", "c"));
+// NaN and Infinity are written as null, as in JavaScript
 String s = toJson(Map.of("key", "value")); // serialize without writing
 
 // Redirects
@@ -122,6 +130,8 @@ notFound();
 ```
 
 ## Custom not-found handler
+
+Runs when no route matches the path (wrong-method requests get a 405 instead):
 
 ```java
 notFound(() -> {
@@ -181,9 +191,20 @@ controller(new UserController());
 start(8080);
 ```
 
+Route methods take no parameters (read them with `param()` and friends);
+`controller()` rejects any that do. Annotated methods inherited from a
+superclass are registered too, and an annotated override in a subclass
+replaces the superclass's route.
+
 Controller routes use the same routing engine as lambda routes and can be
 freely mixed. All request/response methods (`param()`, `print()`, `json()`,
 etc.) work the same way inside annotated methods.
+
+## Concurrency
+
+The embedded server handles each request on its own virtual thread, so
+handlers can block (database calls, outbound HTTP, `Thread.sleep`) without
+holding up other requests.
 
 ## Servlet deployment
 

@@ -16,15 +16,21 @@
 
 package io.github.ghosthack.turismo;
 
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -182,7 +188,8 @@ public final class Turismo {
     }
 
     /**
-     * Registers a HEAD route.
+     * Registers a HEAD route. Without one, HEAD requests are served by
+     * the matching GET route (the response body is discarded).
      *
      * @param path   the URL path pattern
      * @param action the action to execute
@@ -236,7 +243,10 @@ public final class Turismo {
      * Registers an annotated controller instance. Scans the instance's
      * class for methods annotated with {@link GET @GET}, {@link POST @POST},
      * {@link PUT @PUT}, {@link DELETE @DELETE}, or {@link PATCH @PATCH},
-     * and registers each as a route.
+     * and registers each as a route. Annotated methods declared in
+     * superclasses are included; an annotated override in a subclass
+     * replaces the superclass's route. Route methods must take no
+     * parameters.
      *
      * <pre>{@code
      * public class MyController {
@@ -250,35 +260,51 @@ public final class Turismo {
      * }</pre>
      *
      * @param instance the controller instance
-     * @throws IllegalArgumentException if the instance has no annotated methods
+     * @throws IllegalArgumentException if the instance has no annotated
+     *         methods, or an annotated method takes parameters
      */
     public static void controller(Object instance) {
         int count = 0;
-        for (Method m : instance.getClass().getDeclaredMethods()) {
-            String httpMethod = null;
-            String path = null;
-            for (Annotation a : m.getDeclaredAnnotations()) {
-                if (a instanceof GET g) {
-                    httpMethod = "GET"; path = g.value();
-                } else if (a instanceof POST p) {
-                    httpMethod = "POST"; path = p.value();
-                } else if (a instanceof PUT p) {
-                    httpMethod = "PUT"; path = p.value();
-                } else if (a instanceof DELETE d) {
-                    httpMethod = "DELETE"; path = d.value();
-                } else if (a instanceof PATCH p) {
-                    httpMethod = "PATCH"; path = p.value();
+        // Names of registered overridable methods: a subclass's annotated
+        // override replaces the superclass's route instead of adding to it.
+        Set<String> registered = new HashSet<>();
+        for (Class<?> c = instance.getClass(); c != null && c != Object.class;
+                c = c.getSuperclass()) {
+            for (Method m : c.getDeclaredMethods()) {
+                if (m.isSynthetic() || m.isBridge()) {
+                    continue;
                 }
-            }
-            if (httpMethod != null) {
-                m.setAccessible(true);
-                Runnable action = toAction(instance, m);
-                if ("POST".equals(httpMethod)) {
-                    route(httpMethod, path, () -> { status(201); action.run(); });
-                } else {
-                    route(httpMethod, path, action);
+                boolean overridable = !Modifier.isPrivate(m.getModifiers())
+                        && !Modifier.isStatic(m.getModifiers());
+                if (overridable && registered.contains(m.getName())) {
+                    continue;
                 }
-                count++;
+                boolean annotated = false;
+                for (Annotation a : m.getDeclaredAnnotations()) {
+                    String httpMethod = httpMethod(a);
+                    if (httpMethod == null) {
+                        continue;
+                    }
+                    if (m.getParameterCount() != 0) {
+                        throw new IllegalArgumentException(
+                                "Route method must take no parameters: "
+                                + c.getName() + "." + m.getName());
+                    }
+                    m.setAccessible(true);
+                    Runnable action = toAction(instance, m);
+                    String path = routePath(a);
+                    if ("POST".equals(httpMethod)) {
+                        route(httpMethod, path,
+                                () -> { status(201); action.run(); });
+                    } else {
+                        route(httpMethod, path, action);
+                    }
+                    annotated = true;
+                    count++;
+                }
+                if (annotated && overridable) {
+                    registered.add(m.getName());
+                }
             }
         }
         if (count == 0) {
@@ -286,6 +312,24 @@ public final class Turismo {
                     "No annotated routes found in "
                     + instance.getClass().getName());
         }
+    }
+
+    private static String httpMethod(Annotation a) {
+        if (a instanceof GET) return "GET";
+        if (a instanceof POST) return "POST";
+        if (a instanceof PUT) return "PUT";
+        if (a instanceof DELETE) return "DELETE";
+        if (a instanceof PATCH) return "PATCH";
+        return null;
+    }
+
+    private static String routePath(Annotation a) {
+        if (a instanceof GET g) return g.value();
+        if (a instanceof POST p) return p.value();
+        if (a instanceof PUT p) return p.value();
+        if (a instanceof DELETE d) return d.value();
+        if (a instanceof PATCH p) return p.value();
+        throw new IllegalArgumentException("Not a route annotation: " + a);
     }
 
     private static Runnable toAction(Object instance, Method method) {
@@ -476,7 +520,8 @@ public final class Turismo {
      * Sets the Content-Type to {@code application/json} and writes
      * the given object as JSON to the response body. Supports
      * {@link Map}, {@link Iterable}, arrays, {@link String},
-     * {@link Number}, {@link Boolean}, and {@code null}.
+     * {@link Number}, {@link Boolean}, and {@code null}. Non-finite
+     * numbers (NaN, Infinity) are written as {@code null}.
      *
      * @param obj the object to serialize
      */
@@ -488,7 +533,8 @@ public final class Turismo {
     /**
      * Serializes an object to a JSON string. Supports {@link Map},
      * {@link Iterable}, arrays, {@link String}, {@link Number},
-     * {@link Boolean}, and {@code null}.
+     * {@link Boolean}, and {@code null}. Non-finite numbers (NaN,
+     * Infinity) are written as {@code null}.
      *
      * @param obj the object to serialize
      * @return the JSON string
@@ -500,6 +546,12 @@ public final class Turismo {
         }
         if (obj instanceof String) {
             return jsonString((String) obj);
+        }
+        if (obj instanceof Double d) {
+            return jsonNumber(d);
+        }
+        if (obj instanceof Float f) {
+            return jsonNumber(f);
         }
         if (obj instanceof Number || obj instanceof Boolean) {
             return obj.toString();
@@ -515,6 +567,15 @@ public final class Turismo {
         }
         throw new IllegalArgumentException(
                 "Unsupported type: " + obj.getClass().getName());
+    }
+
+    /** JSON has no NaN or Infinity; like JavaScript, write them as null. */
+    private static String jsonNumber(double d) {
+        return Double.isFinite(d) ? Double.toString(d) : "null";
+    }
+
+    private static String jsonNumber(float f) {
+        return Float.isFinite(f) ? Float.toString(f) : "null";
     }
 
     private static String jsonString(String s) {
@@ -613,7 +674,7 @@ public final class Turismo {
             sb.append('[');
             for (int i = 0; i < a.length; i++) {
                 if (i > 0) sb.append(',');
-                sb.append(a[i]);
+                sb.append(jsonNumber(a[i]));
             }
             sb.append(']');
             return sb.toString();
@@ -681,24 +742,38 @@ public final class Turismo {
      * Starts an embedded HTTP server on the given port. Routes must be
      * registered before calling this method. The server runs on
      * background threads; the JVM will not exit while it is running.
+     * Each request is handled on its own virtual thread.
      *
      * @param port the port to listen on (use 0 for a random available port)
+     * @throws IllegalStateException if a server is already running
      */
-    public static void start(int port) {
+    public static synchronized void start(int port) {
+        if (server != null) {
+            throw new IllegalStateException(
+                    "Server already running on port " + server.port()
+                    + "; call stop() first");
+        }
+        Server s;
         try {
-            Server s = new Server(port);
-            server = s;
-            s.start();
+            s = new Server(port);
         } catch (Exception e) {
             throw new RuntimeException(
                     "Failed to start server on port " + port, e);
         }
+        try {
+            s.start();
+        } catch (RuntimeException e) {
+            s.stop();
+            throw new RuntimeException(
+                    "Failed to start server on port " + port, e);
+        }
+        server = s;
     }
 
     /**
      * Stops the embedded HTTP server, if one is running.
      */
-    public static void stop() {
+    public static synchronized void stop() {
         Server s = server;
         if (s != null) {
             s.stop();
@@ -737,7 +812,7 @@ public final class Turismo {
      * @param ctx the request/response context
      */
     public static void handle(Context ctx) {
-        RouteMatch match = resolve(ctx.method(), ctx.path());
+        RouteMatch match = resolve(ctx.method(), ctx.path(), ctx.rawPath());
         CONTEXT.set(ctx);
         PATH_PARAMS.set(match.params);
         try {
@@ -764,29 +839,128 @@ public final class Turismo {
     // ---------------------------------------------------------------
 
     static RouteMatch resolve(String method, String path) {
+        return resolve(method, path, null);
+    }
+
+    /**
+     * Resolves a route. Pattern routes are matched against the segments
+     * of {@code rawPath} (each percent-decoded on its own, so an encoded
+     * {@code /} stays inside its segment) when it is available, otherwise
+     * against the segments of the decoded {@code path}.
+     */
+    static RouteMatch resolve(String method, String path, String rawPath) {
+        String[] segments = segments(path, rawPath);
+        RouteMatch match = find(method, path, segments);
+        if (match == null && "HEAD".equals(method)) {
+            match = find("GET", path, segments);
+        }
+        if (match != null) {
+            return match;
+        }
+        Set<String> allowed = allowedMethods(path, segments);
+        if (!allowed.isEmpty()) {
+            return new RouteMatch(() -> methodNotAllowed(allowed),
+                    Collections.emptyMap());
+        }
+        return new RouteMatch(NOT_FOUND, Collections.emptyMap());
+    }
+
+    private static RouteMatch find(String method, String path,
+            String[] segments) {
         // Exact match (O(1) HashMap lookup)
         Map<String, Runnable> methodRoutes = EXACT.get(method);
-        if (methodRoutes != null) {
+        if (methodRoutes != null && path != null) {
             Runnable action = methodRoutes.get(path);
             if (action != null) {
                 return new RouteMatch(action, Collections.emptyMap());
             }
         }
         // Pattern match (linear scan)
-        if (path != null) {
-            String[] requestParts = path.split("/");
+        if (segments != null) {
             for (PatternRoute pr : PATTERNS) {
                 if (!pr.method.equals(method)) {
                     continue;
                 }
-                Map<String, String> params = pr.pattern.match(requestParts);
+                Map<String, String> params = pr.pattern.match(segments);
                 if (params != null) {
                     return new RouteMatch(pr.action, params);
                 }
             }
         }
-        // Not found
-        return new RouteMatch(NOT_FOUND, Collections.emptyMap());
+        return null;
+    }
+
+    /** Methods with a route for this path, for the 405 Allow header. */
+    private static Set<String> allowedMethods(String path, String[] segments) {
+        Set<String> allowed = new TreeSet<>();
+        if (path != null) {
+            for (Map.Entry<String, Map<String, Runnable>> e : EXACT.entrySet()) {
+                if (e.getValue().containsKey(path)) {
+                    allowed.add(e.getKey());
+                }
+            }
+        }
+        if (segments != null) {
+            for (PatternRoute pr : PATTERNS) {
+                if (pr.pattern.match(segments) != null) {
+                    allowed.add(pr.method);
+                }
+            }
+        }
+        if (allowed.contains("GET")) {
+            allowed.add("HEAD");
+        }
+        return allowed;
+    }
+
+    private static void methodNotAllowed(Set<String> allowed) {
+        status(405);
+        header("Allow", String.join(", ", allowed));
+        print("Method Not Allowed");
+    }
+
+    private static String[] segments(String path, String rawPath) {
+        if (rawPath == null) {
+            return path != null ? path.split("/") : null;
+        }
+        String[] segments = rawPath.split("/");
+        for (int i = 0; i < segments.length; i++) {
+            segments[i] = percentDecode(segments[i]);
+        }
+        return segments;
+    }
+
+    /**
+     * Decodes {@code %XX} escapes as UTF-8. Unlike {@link
+     * java.net.URLDecoder}, {@code +} is left alone (it is literal in
+     * paths) and malformed escapes are kept as-is.
+     */
+    static String percentDecode(String s) {
+        if (s.indexOf('%') < 0) {
+            return s;
+        }
+        StringBuilder sb = new StringBuilder(s.length());
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        int i = 0;
+        while (i < s.length()) {
+            while (i + 2 < s.length() && s.charAt(i) == '%'
+                    && hex(s.charAt(i + 1)) >= 0 && hex(s.charAt(i + 2)) >= 0) {
+                bytes.write(hex(s.charAt(i + 1)) << 4 | hex(s.charAt(i + 2)));
+                i += 3;
+            }
+            if (bytes.size() > 0) {
+                sb.append(bytes.toString(StandardCharsets.UTF_8));
+                bytes.reset();
+            }
+            if (i < s.length()) {
+                sb.append(s.charAt(i++));
+            }
+        }
+        return sb.toString();
+    }
+
+    private static int hex(char c) {
+        return Character.digit(c, 16);
     }
 
     private static void defaultNotFound() {

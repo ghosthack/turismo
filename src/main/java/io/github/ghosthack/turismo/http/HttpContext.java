@@ -66,6 +66,11 @@ public class HttpContext implements Context {
     }
 
     @Override
+    public String rawPath() {
+        return exchange.getRequestURI().getRawPath();
+    }
+
+    @Override
     public String query(String name) {
         if (queryParams == null) {
             queryParams = parseQuery(exchange.getRequestURI().getRawQuery());
@@ -107,15 +112,19 @@ public class HttpContext implements Context {
     /**
      * Flushes the buffered response to the client and closes the
      * exchange. Must be called exactly once after the route action
-     * has completed.
+     * has completed. No body is sent for HEAD requests or for status
+     * codes that forbid one (1xx, 204, 304).
      *
      * @throws IOException if an I/O error occurs while sending
      */
     public void finish() throws IOException {
         byte[] body = buffer.toByteArray();
+        // No body for HEAD (including HEAD served by a GET route) or for
+        // status codes that forbid one
+        boolean sendBody = body.length > 0 && mayHaveBody();
         exchange.sendResponseHeaders(statusCode,
-                body.length > 0 ? body.length : -1);
-        if (body.length > 0) {
+                sendBody ? body.length : -1);
+        if (sendBody) {
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(body);
             }
@@ -124,12 +133,18 @@ public class HttpContext implements Context {
     }
 
     /**
-     * Resets the response buffer, discarding any output written so
-     * far. Used by the server to clear partial output before sending
-     * an error response.
+     * Discards the output and response headers written so far. Used by
+     * the server to clear a partial response before sending an error
+     * response.
      */
-    void resetBuffer() {
+    void reset() {
         buffer.reset();
+        exchange.getResponseHeaders().clear();
+    }
+
+    private boolean mayHaveBody() {
+        return !"HEAD".equals(method())
+                && statusCode >= 200 && statusCode != 204 && statusCode != 304;
     }
 
     private static Map<String, String> parseQuery(String query) {

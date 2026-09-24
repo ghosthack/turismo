@@ -18,6 +18,8 @@ package io.github.ghosthack.turismo.http;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -45,11 +47,15 @@ import io.github.ghosthack.turismo.Turismo;
  * server.stop();
  * }</pre>
  *
+ * <p>Each request is handled on its own virtual thread, so a slow or
+ * blocking handler does not hold up other requests.
+ *
  * @see Turismo#start(int)
  */
 public class Server {
 
     private final HttpServer server;
+    private final ExecutorService executor;
 
     /**
      * Creates a server bound to the given port.
@@ -60,6 +66,9 @@ public class Server {
     public Server(int port) throws IOException {
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         this.server.createContext("/", this::handle);
+        this.executor = Executors.newThreadPerTaskExecutor(
+                Thread.ofVirtual().name("turismo-", 0).factory());
+        this.server.setExecutor(executor);
     }
 
     /**
@@ -75,6 +84,7 @@ public class Server {
      */
     public void stop() {
         server.stop(0);
+        executor.shutdownNow();
     }
 
     /**
@@ -90,16 +100,19 @@ public class Server {
     private void handle(HttpExchange exchange) {
         HttpContext ctx = new HttpContext(exchange);
         try {
-            Turismo.handle(ctx);
-        } catch (Exception e) {
-            ctx.resetBuffer();
-            ctx.status(500);
-            ctx.print("Internal Server Error");
-        }
-        try {
+            try {
+                Turismo.handle(ctx);
+            } catch (Throwable t) {
+                // Catch Errors too, otherwise the client gets no response
+                ctx.reset();
+                ctx.status(500);
+                ctx.print("Internal Server Error");
+            }
             ctx.finish();
         } catch (IOException ignored) {
             // Client may have disconnected
+        } finally {
+            exchange.close();
         }
     }
 }

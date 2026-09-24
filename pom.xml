@@ -5,7 +5,7 @@
 
   <groupId>io.github.ghosthack</groupId>
   <artifactId>turismo</artifactId>
-  <version>3.2.1</version>
+  <version>4.0.0</version>
   <packaging>jar</packaging>
 
   <name>turismo</name>
@@ -37,7 +37,7 @@
         <version>3.16.0</version>
         <configuration>
           <encoding>${project.build.sourceEncoding}</encoding>
-          <release>17</release>
+          <release>21</release>
         </configuration>
       </plugin>
       <plugin>
@@ -56,7 +56,7 @@
         <artifactId>maven-javadoc-plugin</artifactId>
         <version>3.12.0</version>
         <configuration>
-          <release>17</release>
+          <release>21</release>
           <detectJavaApiLink>false</detectJavaApiLink>
         </configuration>
         <executions>
