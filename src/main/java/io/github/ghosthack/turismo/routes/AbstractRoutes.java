@@ -48,6 +48,7 @@ public abstract class AbstractRoutes implements Routes {
     /** The resolver that stores all route mappings. */
     protected final Resolver resolver;
     private volatile boolean initialized = false;
+    private RuntimeException initFailure;
 
     /**
      * Creates a new route container backed by the given resolver.
@@ -64,13 +65,28 @@ public abstract class AbstractRoutes implements Routes {
      * This avoids calling the abstract {@link #map()} method from the
      * constructor, which can cause issues if subclass fields are not
      * yet initialized.
+     *
+     * <p>If {@link #map()} throws, it is not run again (that would
+     * register the routes added before the failure a second time);
+     * every later call throws an {@link IllegalStateException} instead.
+     *
+     * @throws IllegalStateException if route initialization failed
      */
     @Override
     public Resolver getResolver() {
         if (!initialized) {
             synchronized (this) {
+                if (initFailure != null) {
+                    throw new IllegalStateException(
+                            "Route initialization failed", initFailure);
+                }
                 if (!initialized) {
-                    map();
+                    try {
+                        map();
+                    } catch (RuntimeException e) {
+                        initFailure = e;
+                        throw e;
+                    }
                     initialized = true;
                 }
             }

@@ -48,7 +48,8 @@ public final class PathPattern {
      * parameters; segments equal to {@code *} are wildcards.
      *
      * @param path the path pattern (e.g. {@code /users/:id})
-     * @throws IllegalArgumentException if path is null
+     * @throws IllegalArgumentException if path is null or repeats a
+     *         parameter name
      */
     public PathPattern(String path) {
         if (path == null) {
@@ -62,7 +63,11 @@ public final class PathPattern {
             if ("*".equals(parts[i])) {
                 wildcards.add(i);
             } else if (parts[i].startsWith(":")) {
-                names.put(parts[i].substring(1), i);
+                String name = parts[i].substring(1);
+                if (names.put(name, i) != null) {
+                    throw new IllegalArgumentException(
+                            "Duplicate parameter ':" + name + "' in " + path);
+                }
                 params.add(i);
             }
         }

@@ -104,7 +104,7 @@ public class Server {
                 Turismo.handle(ctx);
             } catch (Throwable t) {
                 // Catch Errors too, otherwise the client gets no response
-                ctx.resetBuffer();
+                ctx.reset();
                 ctx.status(500);
                 ctx.print("Internal Server Error");
             }

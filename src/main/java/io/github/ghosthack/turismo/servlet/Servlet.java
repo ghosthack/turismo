@@ -101,6 +101,14 @@ public class Servlet extends HttpServlet {
         } catch (ClassForNameException e) {
             throw new ServletException(e);
         }
+        try {
+            // Register routes now so a broken map() fails deployment
+            // instead of the first request
+            routes.getResolver();
+        } catch (RuntimeException e) {
+            throw new ServletException(
+                    "Failed to initialize routes from " + routesParam, e);
+        }
     }
 
 }

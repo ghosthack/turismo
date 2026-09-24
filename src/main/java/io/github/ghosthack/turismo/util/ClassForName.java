@@ -69,23 +69,43 @@ public class ClassForName {
             throw new ClassForNameException(e);
         } catch (java.lang.reflect.InvocationTargetException e) {
             throw new ClassForNameException(e);
+        } catch (ClassCastException e) {
+            throw new ClassForNameException(e);
         }
     }
 
     /**
      * Loads a class by name and verifies it is a subtype of the given interface.
+     * The thread context class loader is tried first, so a web application's
+     * classes are found even when turismo is on a container's shared
+     * classpath; the class loader that loaded turismo is the fallback.
      *
      * @param <T>            the expected type
      * @param implClassName  the fully qualified class name
      * @param interfaceClass the interface or superclass
      * @return the loaded class
      * @throws ClassNotFoundException if the class cannot be found
+     * @throws ClassCastException if the class is not a subtype of
+     *         {@code interfaceClass}
      */
     public static <T> Class<? extends T> forName(String implClassName,
             Class<T> interfaceClass) throws ClassNotFoundException {
-        Class<?> clazz = Class.forName(implClassName);
+        Class<?> clazz = load(implClassName);
         Class<? extends T> impl = clazz.asSubclass(interfaceClass);
         return impl;
+    }
+
+    private static Class<?> load(String className)
+            throws ClassNotFoundException {
+        ClassLoader tccl = Thread.currentThread().getContextClassLoader();
+        if (tccl != null) {
+            try {
+                return Class.forName(className, true, tccl);
+            } catch (ClassNotFoundException e) {
+                // fall back to turismo's own class loader
+            }
+        }
+        return Class.forName(className);
     }
 
 }

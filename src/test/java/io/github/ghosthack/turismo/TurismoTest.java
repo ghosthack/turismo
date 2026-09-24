@@ -619,6 +619,216 @@ public class TurismoTest {
         Turismo.controller(new Object());
     }
 
+    // ---------------------------------------------------------------
+    // HEAD, 405, encoded paths
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testHeadFallsBackToGet() {
+        Runnable get = () -> {};
+        Turismo.get("/hello", get);
+        Turismo.get("/users/:id", get);
+        assertSame(get, Turismo.resolve("HEAD", "/hello").action);
+        assertSame(get, Turismo.resolve("HEAD", "/users/1").action);
+    }
+
+    @Test
+    public void testExplicitHeadRouteWins() {
+        Runnable head = () -> {};
+        Turismo.get("/hello", () -> {});
+        Turismo.head("/hello", head);
+        assertSame(head, Turismo.resolve("HEAD", "/hello").action);
+    }
+
+    @Test
+    public void testMethodNotAllowed() {
+        Turismo.get("/users/:id", () -> {});
+        Turismo.put("/users/:id", () -> {});
+        MockContext ctx = new MockContext("POST", "/users/42");
+        Turismo.handle(ctx);
+        assertEquals(405, ctx.statusCode);
+        assertEquals("GET, HEAD, PUT", ctx.responseHeaders.get("Allow"));
+        assertEquals("Method Not Allowed", ctx.printed.toString());
+    }
+
+    @Test
+    public void testMethodNotAllowedExactRoute() {
+        Turismo.post("/items", () -> {});
+        MockContext ctx = new MockContext("GET", "/items");
+        Turismo.handle(ctx);
+        assertEquals(405, ctx.statusCode);
+        assertEquals("POST", ctx.responseHeaders.get("Allow"));
+    }
+
+    @Test
+    public void testUnknownPathStillNotFound() {
+        Turismo.get("/users/:id", () -> {});
+        MockContext ctx = new MockContext("POST", "/other");
+        Turismo.handle(ctx);
+        assertEquals(404, ctx.statusCode);
+    }
+
+    @Test
+    public void testEncodedSlashStaysInParam() {
+        Turismo.get("/files/:name", () -> {});
+        Turismo.RouteMatch match =
+                Turismo.resolve("GET", "/files/a/b", "/files/a%2Fb");
+        assertEquals("a/b", match.params.get("name"));
+    }
+
+    @Test
+    public void testRawPathSegmentsAreDecoded() {
+        Turismo.get("/caf\u00e9/:name", () -> {});
+        Turismo.RouteMatch match = Turismo.resolve("GET",
+                "/caf\u00e9/x y", "/caf%C3%A9/x%20y");
+        assertEquals("x y", match.params.get("name"));
+    }
+
+    @Test
+    public void testPercentDecode() {
+        assertEquals("a/b", Turismo.percentDecode("a%2Fb"));
+        assertEquals("caf\u00e9", Turismo.percentDecode("caf%C3%A9"));
+        assertEquals("a+b", Turismo.percentDecode("a+b"));
+        assertEquals("100%", Turismo.percentDecode("100%"));
+        assertEquals("%zz", Turismo.percentDecode("%zz"));
+        assertEquals("%4", Turismo.percentDecode("%4"));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testDuplicateParamNameRejected() {
+        Turismo.get("/a/:id/b/:id", () -> {});
+    }
+
+    // ---------------------------------------------------------------
+    // JSON non-finite numbers
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testJsonNonFiniteNumbersAreNull() {
+        assertEquals("null", Turismo.toJson(Double.NaN));
+        assertEquals("null", Turismo.toJson(Double.POSITIVE_INFINITY));
+        assertEquals("null", Turismo.toJson(Float.NEGATIVE_INFINITY));
+        assertEquals("[1.5,null]",
+                Turismo.toJson(new double[] { 1.5, Double.NaN }));
+        assertEquals("{\"v\":null}",
+                Turismo.toJson(Collections.singletonMap("v", Double.NaN)));
+        assertEquals("2.5", Turismo.toJson(2.5));
+    }
+
+    // ---------------------------------------------------------------
+    // Server lifecycle
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testStartTwiceThrows() {
+        Turismo.start(0);
+        try {
+            Turismo.start(0);
+            fail("Expected IllegalStateException");
+        } catch (IllegalStateException expected) {
+            // first server keeps running
+            assertTrue(Turismo.port() > 0);
+        }
+    }
+
+    @Test
+    public void testFailedStartDoesNotRetainServer() throws Exception {
+        try (java.net.ServerSocket taken = new java.net.ServerSocket(0)) {
+            try {
+                Turismo.start(taken.getLocalPort());
+                fail("Expected RuntimeException");
+            } catch (RuntimeException expected) {
+            }
+        }
+        try {
+            Turismo.port();
+            fail("Expected IllegalStateException");
+        } catch (IllegalStateException expected) {
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Controller validation and inheritance
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testControllerRejectsMethodWithParameters() {
+        try {
+            Turismo.controller(new ParamController());
+            fail("Expected IllegalArgumentException");
+        } catch (IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("withParam"));
+        }
+    }
+
+    @Test
+    public void testControllerIncludesInheritedRoutes() {
+        Turismo.controller(new ChildController());
+        MockContext base = new MockContext("GET", "/base");
+        Turismo.handle(base);
+        assertEquals("base", base.printed.toString());
+        MockContext child = new MockContext("GET", "/child");
+        Turismo.handle(child);
+        assertEquals("child", child.printed.toString());
+    }
+
+    @Test
+    public void testControllerAnnotatedOverrideReplacesParentRoute() {
+        Turismo.controller(new ChildController());
+        MockContext moved = new MockContext("GET", "/new");
+        Turismo.handle(moved);
+        assertEquals("overridden", moved.printed.toString());
+        MockContext old = new MockContext("GET", "/old");
+        Turismo.handle(old);
+        assertEquals(404, old.statusCode);
+    }
+
+    @Test
+    public void testControllerUnannotatedOverrideKeepsParentRoute() {
+        Turismo.controller(new PlainOverrideController());
+        MockContext ctx = new MockContext("GET", "/base");
+        Turismo.handle(ctx);
+        assertEquals("plain override", ctx.printed.toString());
+    }
+
+    static class ParamController {
+        @GET("/p")
+        void withParam(String s) {
+        }
+    }
+
+    static class BaseController {
+        @GET("/base")
+        void base() {
+            Turismo.print("base");
+        }
+
+        @GET("/old")
+        void moved() {
+            Turismo.print("old");
+        }
+    }
+
+    static class ChildController extends BaseController {
+        @GET("/child")
+        void child() {
+            Turismo.print("child");
+        }
+
+        @Override
+        @GET("/new")
+        void moved() {
+            Turismo.print("overridden");
+        }
+    }
+
+    static class PlainOverrideController extends BaseController {
+        @Override
+        void base() {
+            Turismo.print("plain override");
+        }
+    }
+
     /** Test controller used by annotation tests. */
     static class TestController {
         @GET("/ctrl/hello")
