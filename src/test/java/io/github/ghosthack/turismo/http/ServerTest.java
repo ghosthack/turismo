@@ -207,6 +207,30 @@ public class ServerTest {
     }
 
     @Test
+    public void testSingleThreadServesSequentially() throws Exception {
+        Turismo.get("/thread", () ->
+                Turismo.print(Thread.currentThread().getName()));
+        Server server = new Server(0, 1);
+        server.start();
+        try {
+            String url = "http://localhost:" + server.port() + "/thread";
+            assertEquals(fetch("GET", url).body, fetch("GET", url).body);
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testRejectsNonPositiveThreads() throws Exception {
+        new Server(0, 0);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testTurismoStartRejectsNonPositiveThreads() {
+        Turismo.start(0, -1);
+    }
+
+    @Test
     public void testRandomPort() throws Exception {
         Server server = new Server(0);
         server.start();
