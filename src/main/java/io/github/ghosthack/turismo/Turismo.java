@@ -681,31 +681,13 @@ public final class Turismo {
      * Starts an embedded HTTP server on the given port. Routes must be
      * registered before calling this method. The server runs on
      * background threads; the JVM will not exit while it is running.
-     * Requests are handled by {@value Server#DEFAULT_THREADS} worker
-     * threads; use {@link #start(int, int)} to change this.
+     * Each request is handled on its own virtual thread.
      *
      * @param port the port to listen on (use 0 for a random available port)
      */
     public static void start(int port) {
-        start(port, Server.DEFAULT_THREADS);
-    }
-
-    /**
-     * Starts an embedded HTTP server on the given port, handling up to
-     * {@code threads} requests concurrently. Routes must be registered
-     * before calling this method.
-     *
-     * @param port    the port to listen on (use 0 for a random available port)
-     * @param threads the number of worker threads, must be positive
-     * @throws IllegalArgumentException if {@code threads} is not positive
-     */
-    public static void start(int port, int threads) {
-        if (threads <= 0) {
-            throw new IllegalArgumentException(
-                    "threads must be positive, was: " + threads);
-        }
         try {
-            Server s = new Server(port, threads);
+            Server s = new Server(port);
             server = s;
             s.start();
         } catch (Exception e) {
