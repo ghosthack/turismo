@@ -187,12 +187,12 @@ etc.) work the same way inside annotated methods.
 
 ## Concurrency
 
-The embedded server handles requests on a pool of 10 worker threads by
+The embedded server handles requests on a pool of 100 worker threads by
 default; further requests wait until a worker is free. To change the pool
 size:
 
 ```java
-start(8080, 50); // up to 50 concurrent requests
+start(8080, 200); // up to 200 concurrent requests
 ```
 
 ## Servlet deployment

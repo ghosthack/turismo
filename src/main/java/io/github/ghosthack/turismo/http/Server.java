@@ -58,7 +58,7 @@ import io.github.ghosthack.turismo.Turismo;
 public class Server {
 
     /** Default number of concurrent request-handling threads. */
-    public static final int DEFAULT_THREADS = 10;
+    public static final int DEFAULT_THREADS = 100;
 
     private static final long IDLE_SECONDS = 60;
     private static final AtomicInteger POOL_ID = new AtomicInteger();
