@@ -42,6 +42,9 @@ public class App {
 }
 ```
 
+For a runnable starter project, including a servlet deployment example, see
+[turismo-bootstrap](https://github.com/ghosthack/turismo-bootstrap).
+
 ## Routing
 
 ### Exact paths

@@ -53,7 +53,7 @@ public class ServletTest {
         ServletContext context = Mockito.mock(ServletContext.class);
         when(config.getServletContext()).thenReturn(context);
         when(config.getInitParameter("routes"))
-                .thenReturn("io.github.ghosthack.turismo.example.AppRoutes");
+                .thenReturn("io.github.ghosthack.turismo.servlet.TestRoutes");
 
         servlet.init(config);
         assertNotNull(servlet.routes);
