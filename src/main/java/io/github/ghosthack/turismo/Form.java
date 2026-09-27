@@ -19,6 +19,7 @@ package io.github.ghosthack.turismo;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.net.URLDecoder;
 import java.nio.charset.Charset;
@@ -32,7 +33,13 @@ import java.util.Map;
  * The {@code application/x-www-form-urlencoded} fields of one request,
  * parsed from the body the first time they are asked for. Once the body
  * has been read here, {@link #body()} replays it, so a handler can still
- * read the raw body afterwards.
+ * read the raw body afterwards. The other way round cannot work: after a
+ * handler has taken the raw body stream, asking for the fields of a form
+ * body fails with an {@link IllegalStateException} rather than silently
+ * returning none.
+ *
+ * <p>{@link #context()} is the view of the request handed to handlers, so
+ * that {@code Turismo.context().body()} goes through {@link #body()} too.
  */
 final class Form {
 
@@ -40,8 +47,10 @@ final class Form {
 
     private final Context ctx;
     private final int maxSize;
+    private final Context view = new View();
     private Map<String, String> fields;
     private byte[] bytes;
+    private boolean rawBodyTaken;
 
     Form(Context ctx, int maxSize) {
         this.ctx = ctx;
@@ -63,7 +72,16 @@ final class Form {
 
     /** Returns the request body, replayed if the form consumed it. */
     InputStream body() {
-        return bytes != null ? new ByteArrayInputStream(bytes) : ctx.body();
+        if (bytes != null) {
+            return new ByteArrayInputStream(bytes);
+        }
+        rawBodyTaken = true;
+        return ctx.body();
+    }
+
+    /** Returns the request context, with {@code body()} routed through here. */
+    Context context() {
+        return view;
     }
 
     private Map<String, String> parse() {
@@ -75,6 +93,11 @@ final class Form {
         String mime = (semi < 0 ? type : type.substring(0, semi)).trim();
         if (!CONTENT_TYPE.equalsIgnoreCase(mime)) {
             return Collections.emptyMap();
+        }
+        if (rawBodyTaken) {
+            throw new IllegalStateException("Form fields are unavailable: "
+                    + "the request body was already read through body(); "
+                    + "read form fields first, then body() replays it");
         }
         Charset charset = charset(semi < 0 ? "" : type.substring(semi + 1));
         bytes = read();
@@ -131,6 +154,23 @@ final class Form {
             }
         }
         return StandardCharsets.UTF_8;
+    }
+
+    /** Delegates to the request context, except for {@link #body()}. */
+    private final class View implements Context {
+        @Override public String method() { return ctx.method(); }
+        @Override public String path() { return ctx.path(); }
+        @Override public String rawPath() { return ctx.rawPath(); }
+        @Override public String query(String name) { return ctx.query(name); }
+        @Override public String header(String name) { return ctx.header(name); }
+        @Override public InputStream body() { return Form.this.body(); }
+        @Override public void status(int code) { ctx.status(code); }
+        @Override public void header(String name, String value) {
+            ctx.header(name, value);
+        }
+        @Override public void print(String text) { ctx.print(text); }
+        @Override public OutputStream output() { return ctx.output(); }
+        @Override public void reset() { ctx.reset(); }
     }
 
     /**

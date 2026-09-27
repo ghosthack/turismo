@@ -449,6 +449,25 @@ public class ServerTest {
         return new HttpResult(status, body);
     }
 
+    @Test
+    public void testFormErrorReplacesPartialOutput() throws Exception {
+        Turismo.app().setMaxFormSize(4);
+        Turismo.post("/login", () -> {
+            Turismo.print("partial ");
+            Turismo.form("a");
+        });
+        Server server = startServer();
+        try {
+            HttpResult result = postForm(
+                    "http://localhost:" + server.port() + "/login",
+                    "a=123456789");
+            assertEquals(413, result.status);
+            assertEquals("Content Too Large", result.body);
+        } finally {
+            server.stop();
+        }
+    }
+
     private HttpResult postForm(String urlStr, String form) throws Exception {
         HttpURLConnection conn = (HttpURLConnection)
                 URI.create(urlStr).toURL().openConnection();

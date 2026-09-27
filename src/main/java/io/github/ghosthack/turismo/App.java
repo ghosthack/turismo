@@ -465,6 +465,8 @@ public class App {
         try {
             match.action.run();
         } catch (RequestException e) {
+            // Replace anything the handler wrote before the error
+            ctx.reset();
             ctx.status(e.status());
             ctx.print(e.getMessage());
         } finally {

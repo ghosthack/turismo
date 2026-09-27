@@ -133,11 +133,12 @@ public class HttpContext implements Context {
     }
 
     /**
-     * Discards the output and response headers written so far. Used by
-     * the server to clear a partial response before sending an error
-     * response.
+     * Discards the output and response headers written so far. Nothing
+     * has been sent yet, since the response is buffered until
+     * {@link #finish()}.
      */
-    void reset() {
+    @Override
+    public void reset() {
         buffer.reset();
         exchange.getResponseHeaders().clear();
     }
