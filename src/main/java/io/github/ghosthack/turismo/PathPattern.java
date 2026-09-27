@@ -71,9 +71,9 @@ public final class PathPattern {
                 params.add(i);
             }
         }
-        this.paramNames = names;
-        this.paramPositions = params;
-        this.wildcardPositions = wildcards;
+        this.paramNames = Collections.unmodifiableMap(names);
+        this.paramPositions = Collections.unmodifiableSet(params);
+        this.wildcardPositions = Collections.unmodifiableSet(wildcards);
     }
 
     /**
@@ -104,7 +104,7 @@ public final class PathPattern {
         for (Map.Entry<String, Integer> entry : paramNames.entrySet()) {
             params.put(entry.getKey(), requestParts[entry.getValue()]);
         }
-        return params;
+        return Collections.unmodifiableMap(params);
     }
 
     /**
@@ -139,7 +139,7 @@ public final class PathPattern {
     /**
      * Returns the named parameter entries (name to segment index).
      *
-     * @return the parameter entries
+     * @return an unmodifiable view of the parameter entries
      */
     public Set<Map.Entry<String, Integer>> paramEntries() {
         return paramNames.entrySet();

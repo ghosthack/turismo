@@ -17,7 +17,9 @@
 package io.github.ghosthack.turismo.resolver;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A resolver that stores routes in a hash map for O(1) exact-match lookups.
@@ -47,11 +49,25 @@ public class MapResolver extends MethodPathResolver {
 
     @Override
     public Runnable resolve(String method, String path) {
-        Runnable route = findRoute(method, path);
-        if(route != null) {
-            return route;
+        return dispatch(method, path, getNotFoundRoute());
+    }
+
+    @Override
+    protected Runnable find(String method, String path) {
+        return findRoute(method, path);
+    }
+
+    @Override
+    protected Set<String> allowedMethods(String path) {
+        Set<String> allowed = new HashSet<>();
+        for (Map.Entry<String, Map<String, Runnable>> e : methodPathMap.entrySet()) {
+            // Method-agnostic (null) routes match every method, so find()
+            // never falls through to here for them
+            if (e.getKey() != null && e.getValue().containsKey(path)) {
+                allowed.add(e.getKey());
+            }
         }
-        return getNotFoundRoute();
+        return allowed;
     }
 
     @Override

@@ -156,6 +156,8 @@ public class MultipartRequest extends HttpServletRequestWrapper implements
      * @param req the HTTP request
      * @param defaultCharset the charset to use if the request has no encoding
      * @return the wrapped multipart request
+     * @throws ContentTooLargeException if the body is larger than
+     *         {@link MultipartParser#getMaxContentSize()}
      * @throws ParseException if the multipart data cannot be parsed
      * @throws IOException if an I/O error occurs
      */
@@ -163,19 +165,29 @@ public class MultipartRequest extends HttpServletRequestWrapper implements
             throws ParseException, IOException {
         final MultipartRequest multipart = new MultipartRequest(req);
         final String boundary = multipart.getBoundary();
-        final int size = req.getContentLength();
-        if (size < 0) {
-            throw new ParseException("Content-Length is missing or invalid");
+        if (boundary == null) {
+            throw new ParseException("Missing multipart/form-data boundary");
+        }
+        // Negative when unknown (chunked); the parser enforces the limit
+        // on the bytes actually read
+        final long size = req.getContentLengthLong();
+        if (size > MultipartParser.getMaxContentSize()) {
+            throw new ContentTooLargeException(size,
+                    MultipartParser.getMaxContentSize());
         }
         String encoding = req.getCharacterEncoding();
         if (encoding == null) {
             encoding = defaultCharset;
         }
-        InputStream is = req.getInputStream();
-        try {
-            new MultipartParser(is, boundary, multipart, encoding, size).parse();
-        } finally {
-            is.close();
+        try (InputStream is = req.getInputStream()) {
+            final MultipartParser parser;
+            try {
+                parser = new MultipartParser(is, boundary, multipart,
+                        encoding, size);
+            } catch (IllegalArgumentException e) {
+                throw new ParseException("Unsupported charset: " + encoding, e);
+            }
+            parser.parse();
         }
         return multipart;
     }

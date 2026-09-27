@@ -299,6 +299,49 @@ public class ServerTest {
     }
 
     @Test
+    public void testEncodedSlashDoesNotReachExactRoute() throws Exception {
+        Turismo.get("/admin/secret", "SECRET");
+        Server server = startServer();
+        try {
+            HttpResult result = fetch("GET",
+                    "http://localhost:" + server.port() + "/admin%2Fsecret");
+            assertEquals(404, result.status);
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test
+    public void testGracefulStopLetsRequestFinish() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        Turismo.get("/slow", () -> {
+            started.countDown();
+            try {
+                Thread.sleep(300);
+            } catch (InterruptedException e) {
+                Turismo.print("interrupted");
+                return;
+            }
+            Turismo.print("done");
+        });
+        Server server = startServer();
+        int port = server.port();
+        CompletableFuture<HttpResult> pending = CompletableFuture.supplyAsync(
+                () -> {
+                    try {
+                        return fetch("GET", "http://localhost:" + port + "/slow");
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+        assertTrue(started.await(5, TimeUnit.SECONDS));
+        server.stop(java.time.Duration.ofSeconds(5));
+        HttpResult result = pending.get(5, TimeUnit.SECONDS);
+        assertEquals(200, result.status);
+        assertEquals("done", result.body);
+    }
+
+    @Test
     public void testMethodNotAllowed() throws Exception {
         Turismo.get("/only-get", "x");
         Server server = startServer();

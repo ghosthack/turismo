@@ -18,6 +18,7 @@ package io.github.ghosthack.turismo.resolver;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -173,6 +174,11 @@ public class ListResolver extends MethodPathResolver {
 
     @Override
     protected Runnable resolve(String method, String path) {
+        return dispatch(method, path, defaultRunnable);
+    }
+
+    @Override
+    protected Runnable find(String method, String path) {
         List<ParsedEntry> pathList = methodPathList.get(method);
         if (pathList != null && path != null) {
             String[] requestParts = path.split("/");
@@ -186,8 +192,25 @@ public class ListResolver extends MethodPathResolver {
                 }
             }
         }
-        // default route, no mapping found
-        return defaultRunnable;
+        return null;
+    }
+
+    @Override
+    protected Set<String> allowedMethods(String path) {
+        Set<String> allowed = new HashSet<>();
+        if (path == null) {
+            return allowed;
+        }
+        String[] requestParts = path.split("/");
+        for (Map.Entry<String, List<ParsedEntry>> e : methodPathList.entrySet()) {
+            for (ParsedEntry parsedEntry : e.getValue()) {
+                if (parsedEntry.pattern.match(requestParts) != null) {
+                    allowed.add(e.getKey());
+                    break;
+                }
+            }
+        }
+        return allowed;
     }
 
 }

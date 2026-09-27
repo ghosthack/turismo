@@ -49,7 +49,7 @@ public class MapResolverTest {
     }
 
     @Test
-    public void testMethodMismatchReturnsNotFound() {
+    public void testMethodMismatchReturns405() throws Exception {
         final boolean[] called = { false };
         resolver.route(new Runnable() {
             @Override
@@ -68,8 +68,20 @@ public class MapResolverTest {
 
         Runnable resolved = resolver.resolve();
         resolved.run();
-        // Should have called the not-found route
-        org.junit.Assert.assertTrue(called[0]);
+        org.junit.Assert.assertFalse(called[0]);
+        verify(res).setHeader("Allow", "GET, HEAD");
+        verify(res).sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
+    }
+
+    @Test
+    public void testHeadServedByGetRoute() {
+        final Runnable action = () -> { };
+        resolver.route("GET", "/test", action);
+
+        HttpServletRequest req = getRequestMock("HEAD", "/test");
+        Env.create(req, getResponseMock(), null);
+
+        assertSame(action, resolver.resolve());
     }
 
     @Test
