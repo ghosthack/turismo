@@ -16,26 +16,27 @@
 
 package io.github.ghosthack.turismo.resolver;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import io.github.ghosthack.turismo.PathPattern;
 import io.github.ghosthack.turismo.servlet.Env;
 
 /**
  * A resolver that stores routes in a list and supports wildcard ({@code *})
- * and named parameter ({@code :param}) path segments.
+ * and named parameter ({@code :param}) path segments. Routes can be added
+ * while requests are being resolved.
  */
 public class ListResolver extends MethodPathResolver {
     
     private final Map<String, List<ParsedEntry>> methodPathList;
-    private Runnable defaultRunnable;
-    
+    private volatile Runnable defaultRunnable;
+
     /**
      * A parsed route entry that delegates path matching to {@link PathPattern}.
      */
@@ -128,7 +129,7 @@ public class ListResolver extends MethodPathResolver {
     
     /** Creates a new list-based resolver. */
     public ListResolver() {
-        methodPathList = new HashMap<>();
+        methodPathList = new ConcurrentHashMap<>();
     }
 
     /** 
@@ -158,13 +159,12 @@ public class ListResolver extends MethodPathResolver {
 
     @Override
     public void route(String method, String path, Runnable runnable) {
-        List<ParsedEntry> pathList = methodPathList.get(method);
-        if(pathList == null) {
-            pathList = new ArrayList<>();
-            methodPathList.put(method, pathList);
+        if (method == null) {
+            throw new IllegalArgumentException("method must not be null");
         }
         ParsedEntry parsed = new ParsedEntry(runnable, path);
-        pathList.add(parsed);
+        methodPathList.computeIfAbsent(method, k -> new CopyOnWriteArrayList<>())
+                .add(parsed);
     }
 
     @Override
@@ -178,12 +178,30 @@ public class ListResolver extends MethodPathResolver {
     }
 
     @Override
+    protected Runnable resolveEncoded(String method, String[] segments) {
+        return dispatch(method, null, segments, defaultRunnable);
+    }
+
+    @Override
     protected Runnable find(String method, String path) {
-        List<ParsedEntry> pathList = methodPathList.get(method);
-        if (pathList != null && path != null) {
-            String[] requestParts = path.split("/");
+        return find(method, path, path != null ? path.split("/") : null);
+    }
+
+    /**
+     * Matches the routes against {@code segments}; every route is a
+     * pattern route, so {@code path} is not used.
+     *
+     * @param method   the HTTP method
+     * @param path     the decoded request path, or {@code null}
+     * @param segments the decoded path segments
+     * @return the matching action, or {@code null}
+     */
+    @Override
+    protected Runnable find(String method, String path, String[] segments) {
+        List<ParsedEntry> pathList = method != null ? methodPathList.get(method) : null;
+        if (pathList != null && segments != null) {
             for (ParsedEntry parsedEntry : pathList) {
-                Map<String, String> params = parsedEntry.pattern.match(requestParts);
+                Map<String, String> params = parsedEntry.pattern.match(segments);
                 if (params != null) {
                     if (!params.isEmpty()) {
                         Env.setResourceParams(params);
@@ -197,14 +215,18 @@ public class ListResolver extends MethodPathResolver {
 
     @Override
     protected Set<String> allowedMethods(String path) {
+        return allowedMethods(path, path != null ? path.split("/") : null);
+    }
+
+    @Override
+    protected Set<String> allowedMethods(String path, String[] segments) {
         Set<String> allowed = new HashSet<>();
-        if (path == null) {
+        if (segments == null) {
             return allowed;
         }
-        String[] requestParts = path.split("/");
         for (Map.Entry<String, List<ParsedEntry>> e : methodPathList.entrySet()) {
             for (ParsedEntry parsedEntry : e.getValue()) {
-                if (parsedEntry.pattern.match(requestParts) != null) {
+                if (parsedEntry.pattern.match(segments) != null) {
                     allowed.add(e.getKey());
                     break;
                 }
