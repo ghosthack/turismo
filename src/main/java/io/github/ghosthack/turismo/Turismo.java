@@ -365,9 +365,9 @@ public final class Turismo {
      * @param name the field name
      * @return the value, or {@code null} if not present or the request
      *         body is not a form
-     * @throws IllegalStateException if the request has a form body but
-     *         the handler already took the raw body stream, which leaves
-     *         nothing to parse; read form fields before {@link #body()}
+     * If the handler already took the raw body stream there is nothing
+     * left to parse, and the request is answered with {@code 400}; read
+     * form fields before {@link #body()}.
      */
     public static String form(String name) {
         return form().get(name);
@@ -775,10 +775,10 @@ public final class Turismo {
      * ({@code //evil.com}, {@code /\evil.com}) is rejected, so the
      * parameter can't send users to another site.
      *
+     * <p>A target that is not a local path is answered with {@code 400}.
+     *
      * @param path the redirect target, a path starting with a single
      *        {@code /}
-     * @throws IllegalArgumentException if path is not a local path, as
-     *         defined by {@link Validation#isLocalPath(String)}
      */
     public static void redirectLocal(String path) {
         redirectLocal(302, path);
@@ -791,14 +791,11 @@ public final class Turismo {
      * @param code the HTTP status code (e.g. 302, 303, 307)
      * @param path the redirect target, a path starting with a single
      *        {@code /}
-     * @throws IllegalArgumentException if path is not a local path, as
-     *         defined by {@link Validation#isLocalPath(String)}
      */
     public static void redirectLocal(int code, String path) {
         if (!Validation.isLocalPath(path)) {
-            throw new IllegalArgumentException(
-                    "Redirect target must be a local path "
-                    + "(possible open redirect)");
+            throw new RequestException(400,
+                    "Redirect target must be a local path");
         }
         redirect(code, path);
     }

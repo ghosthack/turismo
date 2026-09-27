@@ -235,15 +235,13 @@ public class ServerResponseTest {
         assertEquals("/home", conn.getHeaderField("Location"));
         conn.disconnect();
 
-        captureLog(() -> {
-            for (String next : new String[] {"//evil.com", "/%5Cevil.com",
-                    "/%09/evil.com", "https://x"}) {
-                HttpURLConnection bad = open("/login?next=" + next);
-                assertEquals(500, bad.getResponseCode(), next);
-                assertNull(bad.getHeaderField("Location"), next);
-                bad.disconnect();
-            }
-        });
+        for (String next : new String[] {"//evil.com", "/%5Cevil.com",
+                "/%09/evil.com", "https://x"}) {
+            HttpURLConnection bad = open("/login?next=" + next);
+            assertEquals(400, bad.getResponseCode(), next);
+            assertNull(bad.getHeaderField("Location"), next);
+            bad.disconnect();
+        }
     }
 
     // ---------------------------------------------------------------
