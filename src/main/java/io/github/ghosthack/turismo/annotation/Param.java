@@ -34,8 +34,10 @@ import java.lang.annotation.Target;
  * }
  * }</pre>
  *
- * <p>Without this annotation the Java parameter name is used, which is
- * only available when the controller is compiled with {@code -parameters}.
+ * <p>Without this annotation the Java parameter name is used. It is read
+ * from the class file, which records it when the controller is compiled
+ * with {@code -parameters} or with debug information ({@code -g}, the
+ * Maven and Gradle default).
  *
  * @see io.github.ghosthack.turismo.Turismo#controller(Object)
  */

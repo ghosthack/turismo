@@ -238,8 +238,13 @@ then [form body](#form-bodies)) and converted to the argument type:
 
 ```java
 @GET("/items/:id")
-void getItem(@Param("id") int id) {
+void getItem(int id) {                   // bound by its name, "id"
     print("item: " + id);
+}
+
+@GET("/users/:id")
+void getUser(@Param("id") long userId) { // or named explicitly
+    print("user: " + userId);
 }
 
 @GET("/search")                          // /search?q=shoes&page=2
@@ -259,11 +264,12 @@ void signup(@Param("email") String email, @Param("age") int age) {
 - A value that can't be converted (`/items/abc` for an `int`), or a
   missing value for a primitive, gets `400 Bad Request`. A missing value
   for any other type is passed as `null`.
-- `@Param` can be left out when the controller is compiled with
-  `-parameters` (`<parameters>true</parameters>` in `maven-compiler-plugin`,
-  `options.compilerArgs << '-parameters'` in Gradle); the Java parameter
-  name is used then. Otherwise `controller()` rejects the method, as it
-  does an argument of an unsupported type.
+- Without `@Param`, the Java parameter name is used. turismo reads it from
+  the class file, which records it when the controller is compiled with
+  debug information (`-g`, the default in Maven, Gradle and IDEs) or with
+  `-parameters`. Only a class compiled with neither (plain `javac`, or
+  `-g:none`) needs `@Param`; `controller()` rejects its methods with a
+  message saying so, as it does an argument of an unsupported type.
 
 Controller routes use the same routing engine as lambda routes and can be
 freely mixed. All request/response methods (`param()`, `print()`, `json()`,

@@ -33,7 +33,7 @@ import io.github.ghosthack.turismo.annotation.Param;
  * <p>An argument of type {@link Context} gets the request context and
  * one of type {@link InputStream} gets the request body. Any other
  * argument is a request parameter, named by {@link Param @Param} or by
- * the Java parameter name (compiled with {@code -parameters}), and is
+ * the Java parameter name, and is
  * read with {@link Turismo#param(String)} (path, query, then form
  * parameters) and converted to the argument
  * type: {@code String}, a primitive or its wrapper, an enum (by constant
@@ -42,12 +42,19 @@ import io.github.ghosthack.turismo.annotation.Param;
  * <p>A value that can't be converted, or a missing value for a
  * primitive argument, is answered with {@code 400 Bad Request}; a missing
  * value for any other type is passed as {@code null}.
+ *
+ * <p>Java parameter names come from the {@code MethodParameters} attribute
+ * ({@code javac -parameters}) or, failing that, from the class file's
+ * debug information ({@code javac -g}, the Maven and Gradle default); see
+ * {@link ParameterNames}.
  */
 final class RouteMethod implements Runnable {
 
     private final Object instance;
     private final Method method;
     private final Supplier<Object>[] binders;
+    private String[] debugNames;
+    private boolean debugNamesRead;
 
     @SuppressWarnings("unchecked")
     RouteMethod(Object instance, Method method) {
@@ -56,7 +63,7 @@ final class RouteMethod implements Runnable {
         Parameter[] parameters = method.getParameters();
         this.binders = new Supplier[parameters.length];
         for (int i = 0; i < parameters.length; i++) {
-            binders[i] = binder(parameters[i]);
+            binders[i] = binder(parameters[i], i);
         }
         method.setAccessible(true);
     }
@@ -83,7 +90,7 @@ final class RouteMethod implements Runnable {
         }
     }
 
-    private Supplier<Object> binder(Parameter p) {
+    private Supplier<Object> binder(Parameter p, int index) {
         Class<?> type = p.getType();
         if (type == Context.class) {
             return () -> Turismo.context();
@@ -91,7 +98,7 @@ final class RouteMethod implements Runnable {
         if (type == InputStream.class) {
             return () -> Turismo.body();
         }
-        String name = parameterName(p);
+        String name = parameterName(p, index);
         Function<String, Object> converter = converter(type);
         if (converter == null) {
             throw new IllegalArgumentException("Unsupported type "
@@ -117,7 +124,7 @@ final class RouteMethod implements Runnable {
         };
     }
 
-    private String parameterName(Parameter p) {
+    private String parameterName(Parameter p, int index) {
         Param param = p.getAnnotation(Param.class);
         if (param != null) {
             if (param.value().isEmpty()) {
@@ -126,12 +133,20 @@ final class RouteMethod implements Runnable {
             }
             return param.value();
         }
-        if (!p.isNamePresent()) {
+        if (p.isNamePresent()) {
+            return p.getName();
+        }
+        if (!debugNamesRead) {
+            debugNames = ParameterNames.of(method);
+            debugNamesRead = true;
+        }
+        if (debugNames == null) {
             throw new IllegalArgumentException("Cannot bind parameter "
                     + p.getName() + " of " + describe()
-                    + ": annotate it with @Param or compile with -parameters");
+                    + ": annotate it with @Param, or compile with -parameters"
+                    + " or with debug information (-g)");
         }
-        return p.getName();
+        return debugNames[index];
     }
 
     private String describe() {
