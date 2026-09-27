@@ -1,6 +1,8 @@
 package io.github.ghosthack.turismo.action.behavior;
 
-import org.junit.Test;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import org.junit.jupiter.api.Test;
 
 public class RedirectValidationTest {
 
@@ -11,23 +13,31 @@ public class RedirectValidationTest {
         Redirect.validateLocation("/path?query=value&other=123");
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testNullLocation() {
-        Redirect.validateLocation(null);
+        assertThrows(IllegalArgumentException.class, () -> {
+            Redirect.validateLocation(null);
+        });
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testLocationWithCR() {
-        Redirect.validateLocation("/path\rX-Injected: true");
+        assertThrows(IllegalArgumentException.class, () -> {
+            Redirect.validateLocation("/path\rX-Injected: true");
+        });
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testLocationWithLF() {
-        Redirect.validateLocation("/path\nX-Injected: true");
+        assertThrows(IllegalArgumentException.class, () -> {
+            Redirect.validateLocation("/path\nX-Injected: true");
+        });
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testLocationWithCRLF() {
-        Redirect.validateLocation("/path\r\nX-Injected: true");
+        assertThrows(IllegalArgumentException.class, () -> {
+            Redirect.validateLocation("/path\r\nX-Injected: true");
+        });
     }
 }

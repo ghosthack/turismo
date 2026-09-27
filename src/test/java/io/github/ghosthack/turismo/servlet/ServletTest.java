@@ -1,49 +1,56 @@
 package io.github.ghosthack.turismo.servlet;
 
-import static org.junit.Assert.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import jakarta.servlet.ServletConfig;
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ServletTest {
 
-    @Test(expected = ServletException.class)
+    @Test
     public void testInitWithMissingRoutesParam() throws ServletException {
-        Servlet servlet = new Servlet();
-        ServletConfig config = Mockito.mock(ServletConfig.class);
-        ServletContext context = Mockito.mock(ServletContext.class);
-        when(config.getServletContext()).thenReturn(context);
-        when(config.getInitParameter("routes")).thenReturn(null);
+        assertThrows(ServletException.class, () -> {
+            Servlet servlet = new Servlet();
+            ServletConfig config = Mockito.mock(ServletConfig.class);
+            ServletContext context = Mockito.mock(ServletContext.class);
+            when(config.getServletContext()).thenReturn(context);
+            when(config.getInitParameter("routes")).thenReturn(null);
 
-        servlet.init(config);
+            servlet.init(config);
+        });
     }
 
-    @Test(expected = ServletException.class)
+    @Test
     public void testInitWithEmptyRoutesParam() throws ServletException {
-        Servlet servlet = new Servlet();
-        ServletConfig config = Mockito.mock(ServletConfig.class);
-        ServletContext context = Mockito.mock(ServletContext.class);
-        when(config.getServletContext()).thenReturn(context);
-        when(config.getInitParameter("routes")).thenReturn("   ");
+        assertThrows(ServletException.class, () -> {
+            Servlet servlet = new Servlet();
+            ServletConfig config = Mockito.mock(ServletConfig.class);
+            ServletContext context = Mockito.mock(ServletContext.class);
+            when(config.getServletContext()).thenReturn(context);
+            when(config.getInitParameter("routes")).thenReturn("   ");
 
-        servlet.init(config);
+            servlet.init(config);
+        });
     }
 
-    @Test(expected = ServletException.class)
+    @Test
     public void testInitWithNonExistentClass() throws ServletException {
-        Servlet servlet = new Servlet();
-        ServletConfig config = Mockito.mock(ServletConfig.class);
-        ServletContext context = Mockito.mock(ServletContext.class);
-        when(config.getServletContext()).thenReturn(context);
-        when(config.getInitParameter("routes")).thenReturn("com.nonexistent.Routes");
+        assertThrows(ServletException.class, () -> {
+            Servlet servlet = new Servlet();
+            ServletConfig config = Mockito.mock(ServletConfig.class);
+            ServletContext context = Mockito.mock(ServletContext.class);
+            when(config.getServletContext()).thenReturn(context);
+            when(config.getInitParameter("routes")).thenReturn("com.nonexistent.Routes");
 
-        servlet.init(config);
+            servlet.init(config);
+        });
     }
 
     @Test
@@ -59,27 +66,31 @@ public class ServletTest {
         assertNotNull(servlet.routes);
     }
 
-    @Test(expected = ServletException.class)
+    @Test
     public void testInitFailsWhenMapThrows() throws ServletException {
-        Servlet servlet = new Servlet();
-        ServletConfig config = Mockito.mock(ServletConfig.class);
-        ServletContext context = Mockito.mock(ServletContext.class);
-        when(config.getServletContext()).thenReturn(context);
-        when(config.getInitParameter("routes")).thenReturn(
-                "io.github.ghosthack.turismo.servlet.ServletTest$BrokenRoutes");
+        assertThrows(ServletException.class, () -> {
+            Servlet servlet = new Servlet();
+            ServletConfig config = Mockito.mock(ServletConfig.class);
+            ServletContext context = Mockito.mock(ServletContext.class);
+            when(config.getServletContext()).thenReturn(context);
+            when(config.getInitParameter("routes")).thenReturn(
+                    "io.github.ghosthack.turismo.servlet.ServletTest$BrokenRoutes");
 
-        servlet.init(config);
+            servlet.init(config);
+        });
     }
 
-    @Test(expected = ServletException.class)
+    @Test
     public void testInitWithClassThatIsNotRoutes() throws ServletException {
-        Servlet servlet = new Servlet();
-        ServletConfig config = Mockito.mock(ServletConfig.class);
-        ServletContext context = Mockito.mock(ServletContext.class);
-        when(config.getServletContext()).thenReturn(context);
-        when(config.getInitParameter("routes")).thenReturn("java.lang.String");
+        assertThrows(ServletException.class, () -> {
+            Servlet servlet = new Servlet();
+            ServletConfig config = Mockito.mock(ServletConfig.class);
+            ServletContext context = Mockito.mock(ServletContext.class);
+            when(config.getServletContext()).thenReturn(context);
+            when(config.getInitParameter("routes")).thenReturn("java.lang.String");
 
-        servlet.init(config);
+            servlet.init(config);
+        });
     }
 
     /** Routes whose map() fails, loaded by name above. */

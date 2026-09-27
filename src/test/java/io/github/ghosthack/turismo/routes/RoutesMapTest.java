@@ -7,9 +7,9 @@ import static org.mockito.Mockito.verify;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import io.github.ghosthack.turismo.servlet.Env;
 
@@ -17,7 +17,7 @@ public class RoutesMapTest {
 
     private RoutesMap routes;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         routes = new RoutesMap() {
             @Override
@@ -56,7 +56,7 @@ public class RoutesMapTest {
         };
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         Env.destroy();
     }

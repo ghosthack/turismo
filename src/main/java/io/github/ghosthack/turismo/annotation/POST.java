@@ -22,8 +22,9 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Maps a method to an HTTP POST route. The default response status
- * is 201 (Created).
+ * Maps a method to an HTTP POST route. Like every route, the default
+ * response status is 200; call {@code status(201)} to report a created
+ * resource.
  *
  * <pre>{@code
  * @POST("/users")

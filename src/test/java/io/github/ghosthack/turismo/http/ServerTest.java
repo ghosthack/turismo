@@ -1,6 +1,6 @@
 package io.github.ghosthack.turismo.http;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -11,14 +11,14 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import io.github.ghosthack.turismo.Turismo;
 
 public class ServerTest {
 
-    @After
+    @AfterEach
     public void tearDown() {
         Turismo.reset();
     }

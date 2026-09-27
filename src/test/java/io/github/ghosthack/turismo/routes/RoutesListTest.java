@@ -2,15 +2,15 @@ package io.github.ghosthack.turismo.routes;
 
 import static io.github.ghosthack.turismo.HttpMocks.getRequestMock;
 import static io.github.ghosthack.turismo.HttpMocks.getResponseMock;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.verify;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import io.github.ghosthack.turismo.servlet.Env;
 
@@ -18,7 +18,7 @@ public class RoutesListTest {
 
     private RoutesList routes;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         routes = new RoutesList() {
             @Override
@@ -69,7 +69,7 @@ public class RoutesListTest {
         };
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         Env.destroy();
     }
@@ -172,13 +172,13 @@ public class RoutesListTest {
         };
         try {
             broken.getResolver();
-            org.junit.Assert.fail("Expected IllegalStateException");
+            org.junit.jupiter.api.Assertions.fail("Expected IllegalStateException");
         } catch (IllegalStateException e) {
             assertEquals("broken map", e.getMessage());
         }
         try {
             broken.getResolver();
-            org.junit.Assert.fail("Expected IllegalStateException");
+            org.junit.jupiter.api.Assertions.fail("Expected IllegalStateException");
         } catch (IllegalStateException e) {
             assertEquals("Route initialization failed", e.getMessage());
             assertEquals("broken map", e.getCause().getMessage());
