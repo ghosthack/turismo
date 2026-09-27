@@ -21,6 +21,8 @@ import java.nio.charset.StandardCharsets;
 
 import jakarta.servlet.http.HttpServletRequest;
 
+import io.github.ghosthack.turismo.PathPattern;
+
 /**
  * Encoded-slash handling for servlet requests, matching the embedded
  * server's routing: the container decodes {@code %2F} in the path info
@@ -30,6 +32,9 @@ import jakarta.servlet.http.HttpServletRequest;
  * percent-decoded on its own, so the slash stays inside its segment.
  */
 final class EncodedPath {
+
+    /** Segments that match no route: the raw path can't be lined up. */
+    static final String[] NO_MATCH = new String[0];
 
     private EncodedPath() {
     }
@@ -63,13 +68,13 @@ final class EncodedPath {
                     pos = raw.indexOf('/', pos + 1);
                     if (pos < 0) {
                         // Can't line up the raw path: match nothing
-                        return new String[] { "", "" };
+                        return NO_MATCH;
                     }
                 }
             }
             raw = raw.substring(pos);
         }
-        String[] segments = raw.split("/");
+        String[] segments = PathPattern.split(raw);
         for (int i = 0; i < segments.length; i++) {
             segments[i] = percentDecode(stripPathParameters(segments[i]));
         }

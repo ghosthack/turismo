@@ -24,6 +24,7 @@ import java.util.TreeSet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
+import io.github.ghosthack.turismo.PathPattern;
 import io.github.ghosthack.turismo.Resolver;
 import io.github.ghosthack.turismo.action.ActionException;
 import io.github.ghosthack.turismo.servlet.Env;
@@ -55,6 +56,9 @@ public abstract class MethodPathResolver implements Resolver {
         String path = extractPath();
         String method = req.getMethod();
         String[] segments = EncodedPath.segments(req, pathInfo != null);
+        if (segments == EncodedPath.NO_MATCH) {
+            return resolveEncoded(method, null);
+        }
         if (segments != null) {
             return resolveEncoded(method, segments);
         }
@@ -72,7 +76,8 @@ public abstract class MethodPathResolver implements Resolver {
      * default route instead.
      *
      * @param method   the HTTP method
-     * @param segments the decoded segments of the raw path
+     * @param segments the decoded segments of the raw path, or {@code null}
+     *                 if it can't be matched against any route
      * @return the action to run
      */
     protected Runnable resolveEncoded(String method, String[] segments) {
@@ -121,7 +126,7 @@ public abstract class MethodPathResolver implements Resolver {
      *
      * @param method   the HTTP method
      * @param path     the decoded request path, or {@code null}
-     * @param segments the decoded path segments
+     * @param segments the decoded path segments, or {@code null}
      * @return the matching action, or {@code null}
      */
     protected Runnable find(String method, String path, String[] segments) {
@@ -134,7 +139,7 @@ public abstract class MethodPathResolver implements Resolver {
      * {@link #allowedMethods(String)} when there is a path.
      *
      * @param path     the decoded request path, or {@code null}
-     * @param segments the decoded path segments
+     * @param segments the decoded path segments, or {@code null}
      * @return the matching methods; empty if none
      */
     protected Set<String> allowedMethods(String path, String[] segments) {
@@ -155,7 +160,7 @@ public abstract class MethodPathResolver implements Resolver {
     protected final Runnable dispatch(String method, String path,
             Runnable fallback) {
         return dispatch(method, path,
-                path != null ? path.split("/") : null, fallback);
+                path != null ? PathPattern.split(path) : null, fallback);
     }
 
     /**
@@ -182,9 +187,19 @@ public abstract class MethodPathResolver implements Resolver {
             if (allowed.contains("GET")) {
                 allowed.add("HEAD");
             }
+            allowed.add("OPTIONS");
+            if ("OPTIONS".equals(method)) {
+                return () -> options(allowed);
+            }
             return () -> methodNotAllowed(allowed);
         }
         return fallback;
+    }
+
+    private static void options(Set<String> allowed) {
+        HttpServletResponse res = Env.res();
+        res.setHeader("Allow", String.join(", ", allowed));
+        res.setStatus(HttpServletResponse.SC_NO_CONTENT);
     }
 
     private static void methodNotAllowed(Set<String> allowed) {
