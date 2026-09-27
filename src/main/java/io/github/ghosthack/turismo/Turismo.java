@@ -25,6 +25,7 @@ import java.lang.reflect.RecordComponent;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 import io.github.ghosthack.turismo.annotation.DELETE;
@@ -328,6 +329,28 @@ public final class Turismo {
     }
 
     /**
+     * Returns every value of a parameter, for names that repeat
+     * ({@code ?tag=a&tag=b}). Looks in the same places as
+     * {@link #param(String)} and returns the values from the first place
+     * that has the name: a path parameter (one value), else the query
+     * string, else the form body.
+     *
+     * @param name the parameter name
+     * @return the values in request order; empty if not found
+     */
+    public static List<String> paramValues(String name) {
+        Map<String, String> params = PATH_PARAMS.get();
+        if (params != null) {
+            String value = params.get(name);
+            if (value != null) {
+                return List.of(value);
+            }
+        }
+        List<String> values = context().queryValues(name);
+        return !values.isEmpty() ? values : formValues(name);
+    }
+
+    /**
      * Returns a field of an {@code application/x-www-form-urlencoded}
      * request body, as sent by an HTML form. The body is read and parsed
      * on first use (the raw body stays available through {@link #body()}).
@@ -356,6 +379,18 @@ public final class Turismo {
         return form().fields();
     }
 
+    /**
+     * Returns every value of a repeated form field (such as a group of
+     * checkboxes sharing a name), as described in {@link #form(String)}.
+     *
+     * @param name the field name
+     * @return the values in body order; empty if not present or the
+     *         request body is not a form
+     */
+    public static List<String> formValues(String name) {
+        return form().values(name);
+    }
+
     private static Form form() {
         context(); // Throws if no request is bound; FORM is bound with it
         return FORM.get();
@@ -374,13 +409,25 @@ public final class Turismo {
     }
 
     /**
-     * Returns a query string parameter by name.
+     * Returns a query string parameter by name; the first value if the
+     * name repeats.
      *
      * @param name the parameter name
      * @return the value, or {@code null} if not present
      */
     public static String query(String name) {
         return context().query(name);
+    }
+
+    /**
+     * Returns every value of a repeated query string parameter
+     * ({@code ?tag=a&tag=b}).
+     *
+     * @param name the parameter name
+     * @return the values in order; empty if not present
+     */
+    public static List<String> queryValues(String name) {
+        return context().queryValues(name);
     }
 
     /**
