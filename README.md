@@ -350,9 +350,19 @@ is logged through `System.Logger` (by default `java.util.logging`).
 
 turismo also supports deployment in any Jakarta EE 10 servlet container
 (Tomcat 10.1+, Jetty 12+, etc.) via the `Servlet` class and
-`RoutesMap`/`RoutesList` API. As with the embedded server, HEAD requests are
-served by GET routes and wrong-method requests get `405` with an `Allow`
-header.
+`RoutesMap`/`RoutesList` API. As with the embedded server:
+
+- HEAD requests are served by GET routes, and wrong-method requests get `405`
+  with an `Allow` header.
+- An exception thrown by an action is logged through `System.Logger` and
+  answered with `500` (the container's error page never shows the stack
+  trace); a request with no matching route gets `404`.
+- Form and query parameters are decoded as UTF-8 when the request declares
+  no charset.
+- An encoded slash is not a path separator: `/admin%2Fsecret` doesn't match
+  an `/admin/secret` route, while `/files/:name` matches `/files/a%2Fb` with
+  `name` = `a/b`. (Most containers reject `%2F` in paths by default anyway.)
+- Routes can be added at any time, including while requests are served.
 
 ### RoutesMap — exact match (O(1) lookup)
 
@@ -376,6 +386,7 @@ public class AppRoutes extends RoutesMap {
 ### RoutesList — wildcards and named parameters
 
 ```java
+import io.github.ghosthack.turismo.action.Action;
 import io.github.ghosthack.turismo.routes.RoutesList;
 
 public class AppRoutes extends RoutesList {
@@ -388,11 +399,43 @@ public class AppRoutes extends RoutesList {
             }
         });
 
-        // Route aliases
+        // Route aliases: /u/:id runs the /users/:id action
         get("/u/:id", "/users/:id");
     }
 }
 ```
+
+### ExtendedRoutesMap — forwarding aliases
+
+`RoutesMap` has no string alias; `ExtendedRoutesMap` adds
+`get(path, target)`, which forwards the request to another resource of the
+web application (another route, a JSP, a static file) with a
+`RequestDispatcher`:
+
+```java
+import io.github.ghosthack.turismo.action.Action;
+import io.github.ghosthack.turismo.routes.ExtendedRoutesMap;
+
+public class AppRoutes extends ExtendedRoutesMap {
+    @Override
+    protected void map() {
+        get("/hello", new Action() {
+            @Override
+            public void run() {
+                print("Hello!");
+            }
+        });
+        get("/hi", "/hello");
+    }
+}
+```
+
+The target is a context-relative path starting with `/` and goes through the
+container's servlet mappings, so `/hello` only reaches the route if the
+servlet is mapped to `/` or `/*` (with a prefix mapping such as `/app/*`,
+forward to `/app/hello`). Forward targets, like `forward()` and `jsp()`
+paths, can name anything in the web application, including `/WEB-INF`, so
+don't build them from request input.
 
 ### Embedded Jetty
 
@@ -433,23 +476,53 @@ public class Main {
   </servlet>
   <servlet-mapping>
     <servlet-name>app</servlet-name>
-    <url-pattern>/*</url-pattern>
+    <url-pattern>/</url-pattern>
   </servlet-mapping>
 
 </web-app>
 ```
 
+Mapped to `/`, turismo replaces the container's default servlet and gets
+every request that no other mapping claims, while `*.jsp` requests and
+forwards still reach the container's JSP servlet. A route's path is the
+request path within the context (`/hello`). To serve routes under a prefix
+instead, map to `/app/*`; route paths are then relative to it (`/hello` is
+served at `/app/hello`).
+
 ### JSP rendering
 
+`jsp()` forwards to a JSP, which the container's JSP servlet renders. Map
+turismo to `/` or a prefix such as `/app/*` as shown above, not to `/*`: a
+`/*` mapping also matches the JSP's path, so the forward comes back to
+turismo (a `404` for a path with no route) instead of rendering the page.
+
 ```java
-get("/render", new Action() {
+import io.github.ghosthack.turismo.action.Action;
+import io.github.ghosthack.turismo.routes.RoutesMap;
+
+public class AppRoutes extends RoutesMap {
     @Override
-    public void run() {
-        req().setAttribute("message", "Hello World!");
-        jsp("/WEB-INF/views/render.jsp");
+    protected void map() {
+        get("/render", new Action() {
+            @Override
+            public void run() {
+                req().setAttribute("message", "Hello World!");
+                jsp("/WEB-INF/views/render.jsp");
+            }
+        });
     }
-});
+}
 ```
+
+`/WEB-INF/views/render.jsp`:
+
+```jsp
+<%@ page contentType="text/html; charset=UTF-8" %>
+<p>${message}</p>
+```
+
+(Use `${fn:escapeXml(message)}` or `<c:out>` from JSTL for values that come
+from the request.)
 
 ### Multipart file uploads
 
