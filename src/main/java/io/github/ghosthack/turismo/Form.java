@@ -37,8 +37,9 @@ import java.util.Map;
  * has been read here, {@link #body()} replays it, so a handler can still
  * read the raw body afterwards. The other way round cannot work: after a
  * handler has taken the raw body stream, asking for the fields of a form
- * body fails with an {@link IllegalStateException} rather than silently
- * returning none.
+ * body fails with a {@code 400} {@link RequestException} rather than
+ * silently returning none. (Controller arguments are bound in an order
+ * that avoids this: see {@link RouteMethod}.)
  *
  * <p>{@link #context()} is the view of the request handed to handlers, so
  * that {@code Turismo.context().body()} goes through {@link #body()} too.
@@ -115,9 +116,9 @@ final class Form {
             return Map.of();
         }
         if (rawBodyTaken) {
-            throw new IllegalStateException("Form fields are unavailable: "
-                    + "the request body was already read through body(); "
-                    + "read form fields first, then body() replays it");
+            throw new RequestException(400, "Bad Request: form fields are"
+                    + " unavailable: the request body was already read through"
+                    + " body(); read form fields first, then body() replays it");
         }
         Charset charset = charset(semi < 0 ? "" : type.substring(semi + 1));
         bytes = read();

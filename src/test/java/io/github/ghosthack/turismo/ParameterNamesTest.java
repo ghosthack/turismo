@@ -62,9 +62,14 @@ public class ParameterNamesTest {
     }
 
     private Class<?> compile(String... options) throws Exception {
-        Path src = dir.resolve("src/sample/Ctl.java");
+        return compileSource(SOURCE, "Ctl", options);
+    }
+
+    private Class<?> compileSource(String source, String className,
+            String... options) throws Exception {
+        Path src = dir.resolve("src/sample/" + className + ".java");
         Files.createDirectories(src.getParent());
-        Files.writeString(src, SOURCE);
+        Files.writeString(src, source);
         Path out = dir.resolve("out");
         Files.createDirectories(out);
 
@@ -76,7 +81,7 @@ public class ParameterNamesTest {
 
         URLClassLoader loader = new URLClassLoader(
                 new URL[] {out.toUri().toURL()}, getClass().getClassLoader());
-        return loader.loadClass("sample.Ctl");
+        return loader.loadClass("sample." + className);
     }
 
     private static Method method(Class<?> c, String name) {
@@ -139,6 +144,57 @@ public class ParameterNamesTest {
         Class<?> c = compile("-g:none", "-parameters");
         Turismo.controller(c.getDeclaredConstructor().newInstance());
         assertEquals("200 sum=10 14", get("/sum/7/3"));
+    }
+
+    /** A route declared on an abstract method, implemented unannotated. */
+    private static final String ABSTRACT_SOURCE = """
+            package sample;
+
+            import io.github.ghosthack.turismo.Turismo;
+            import io.github.ghosthack.turismo.annotation.GET;
+
+            abstract class Base {
+                @GET("/abs/:id")
+                public abstract void item(int id, String q);
+            }
+
+            public class Impl extends Base {
+                @Override
+                public void item(int id, String q) {
+                    Turismo.print("item " + id + " " + q);
+                }
+            }
+            """;
+
+    @Test
+    public void testAbstractRouteMethodNamesFromImplementation()
+            throws Exception {
+        Class<?> c = compileSource(ABSTRACT_SOURCE, "Impl", "-g");
+        Method item = c.getSuperclass().getDeclaredMethod(
+                "item", int.class, String.class);
+        assertFalse(item.getParameters()[0].isNamePresent(),
+                "precondition: compiled without -parameters");
+        assertNull(ParameterNames.of(item), "abstract: no Code attribute");
+
+        Turismo.controller(c.getDeclaredConstructor().newInstance());
+        MockContext ctx = new MockContext("GET", "/abs/4");
+        ctx.queryParams.put("q", "x");
+        Turismo.handle(ctx);
+        assertEquals("item 4 x", ctx.printed.toString());
+    }
+
+    @Test
+    public void testAbstractRouteMethodWithoutNamesHasPreciseMessage()
+            throws Exception {
+        Class<?> c = compileSource(ABSTRACT_SOURCE, "Impl", "-g:none");
+        Object controller = c.getDeclaredConstructor().newInstance();
+        IllegalArgumentException e = assertThrows(
+                IllegalArgumentException.class,
+                () -> Turismo.controller(controller));
+        assertTrue(e.getMessage().contains("abstract method sample.Base.item"),
+                e.getMessage());
+        assertTrue(e.getMessage().contains("sample.Impl.item"), e.getMessage());
+        assertTrue(e.getMessage().contains("@Param"), e.getMessage());
     }
 
     @Test
