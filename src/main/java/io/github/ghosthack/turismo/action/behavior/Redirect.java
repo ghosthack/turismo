@@ -46,11 +46,13 @@ public class Redirect {
     }
 
     /**
-     * Validates that the location does not contain CR/LF characters
-     * which could enable HTTP response splitting (header injection).
+     * Validates that the location contains no control characters, such
+     * as CR/LF which could enable HTTP response splitting (header
+     * injection).
      *
      * @param location the redirect target
-     * @throws IllegalArgumentException if location is null or contains CR/LF
+     * @throws IllegalArgumentException if location is null or contains
+     *         a control character
      */
     static void validateLocation(String location) {
         Validation.validateLocation(location);

@@ -53,6 +53,14 @@ import io.github.ghosthack.turismo.Turismo;
  * <p>Each request is handled on its own virtual thread, so a slow or
  * blocking handler does not hold up other requests.
  *
+ * <p>The server sets no request or response timeouts of its own. The
+ * JDK server reads them from the {@code sun.net.httpserver.maxReqTime},
+ * {@code sun.net.httpserver.maxRspTime} and
+ * {@code sun.net.httpserver.idleInterval} system properties (all in
+ * seconds), once per JVM; set them on the command line
+ * ({@code -D...}) before the first server is created. See the README
+ * for recommended values.
+ *
  * @see Turismo#start(int)
  */
 public class Server {
@@ -159,13 +167,19 @@ public class Server {
             try {
                 app.handle(ctx);
             } catch (Throwable t) {
-                // Catch Errors too, otherwise the client gets no response
+                // Catch Errors too, otherwise the client gets no response.
+                // Log the raw path, escaped: a decoded %0A could forge
+                // log lines
                 LOG.log(System.Logger.Level.ERROR,
-                        "Unhandled error in " + ctx.method() + " "
-                        + ctx.path(), t);
-                ctx.reset();
-                ctx.status(500);
-                ctx.print("Internal Server Error");
+                        "Unhandled error in " + escape(ctx.method()) + " "
+                        + escape(ctx.rawPath()), t);
+                if (!ctx.isStreaming()) {
+                    ctx.reset();
+                    ctx.status(500);
+                    ctx.print("Internal Server Error");
+                }
+                // Streaming: status and headers are already sent, so
+                // just end the response below
             }
             ctx.finish();
         } catch (IOException ignored) {
@@ -173,5 +187,26 @@ public class Server {
         } finally {
             exchange.close();
         }
+    }
+
+    /** Escapes control characters so request data can't break log lines. */
+    static String escape(String s) {
+        if (s == null) {
+            return "null";
+        }
+        StringBuilder sb = null;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c < 0x20 || c == 0x7F) {
+                if (sb == null) {
+                    sb = new StringBuilder(s.length() + 8);
+                    sb.append(s, 0, i);
+                }
+                sb.append(String.format("\\u%04x", (int) c));
+            } else if (sb != null) {
+                sb.append(c);
+            }
+        }
+        return sb != null ? sb.toString() : s;
     }
 }

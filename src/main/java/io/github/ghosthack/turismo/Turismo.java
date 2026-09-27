@@ -16,8 +16,10 @@
 
 package io.github.ghosthack.turismo;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.lang.reflect.Array;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -33,6 +35,7 @@ import io.github.ghosthack.turismo.annotation.GET;
 import io.github.ghosthack.turismo.annotation.PATCH;
 import io.github.ghosthack.turismo.annotation.POST;
 import io.github.ghosthack.turismo.annotation.PUT;
+import io.github.ghosthack.turismo.http.HttpContext;
 import io.github.ghosthack.turismo.http.Server;
 import io.github.ghosthack.turismo.util.Validation;
 
@@ -74,6 +77,8 @@ public final class Turismo {
     private static final ThreadLocal<Map<String, String>> PATH_PARAMS =
             new ThreadLocal<>();
     private static final ThreadLocal<Form> FORM = new ThreadLocal<>();
+    /** The transport's own context, which {@link #CONTEXT} wraps. */
+    private static final ThreadLocal<Context> TRANSPORT = new ThreadLocal<>();
 
     private static final App APP = new App();
 
@@ -459,7 +464,11 @@ public final class Turismo {
     /**
      * Sets the response HTTP status code.
      *
-     * @param code the status code
+     * @param code the status code; the embedded server accepts 200-599
+     * @throws IllegalArgumentException on the embedded server, if code
+     *         is outside 200-599
+     * @throws IllegalStateException on the embedded server, if the
+     *         response is already {@linkplain #stream() streaming}
      */
     public static void status(int code) {
         context().status(code);
@@ -513,6 +522,48 @@ public final class Turismo {
      */
     public static OutputStream output() {
         return context().output();
+    }
+
+    /**
+     * Switches the response to streaming and returns the body stream.
+     * By default the embedded server buffers the whole response in
+     * memory to set {@code Content-Length}; streaming sends the status
+     * and headers now and writes the body straight to the client with
+     * chunked transfer encoding, for large or incremental responses.
+     * Output written before the call is sent first; later
+     * {@link #print(String)} and {@link #output()} also go to the stream.
+     *
+     * <pre>{@code
+     * get("/export.csv", () -> {
+     *     type("text/csv");
+     *     OutputStream out = stream();
+     *     for (Row row : rows()) { out.write(row.csv()); }
+     * });
+     * }</pre>
+     *
+     * <p>Set the status and headers first: afterwards {@link #status(int)}
+     * and {@link #header(String, String)} throw
+     * {@link IllegalStateException}. An exception thrown after streaming
+     * has started can't become a 500; it is logged and the connection is
+     * closed, so the client may see a truncated body. Calling this again
+     * returns the same stream.
+     *
+     * @return the response body stream
+     * @throws UnsupportedOperationException if the request is not served
+     *         by the embedded server ({@link Server})
+     * @throws java.io.UncheckedIOException if the headers can't be sent
+     */
+    public static OutputStream stream() {
+        context();
+        if (!(TRANSPORT.get() instanceof HttpContext http)) {
+            throw new UnsupportedOperationException(
+                    "Streaming is only supported by the embedded server");
+        }
+        try {
+            return http.stream();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     // ---------------------------------------------------------------
@@ -688,21 +739,27 @@ public final class Turismo {
     }
 
     /**
-     * Sends an HTTP 302 redirect to the given URL.
+     * Sends an HTTP 302 redirect to the given URL. The URL may point
+     * anywhere; for a target taken from the request (such as a
+     * {@code next} parameter) use {@link #redirectLocal(String)} to
+     * avoid an open redirect.
      *
      * @param url the redirect target
-     * @throws IllegalArgumentException if the URL is null or contains CR/LF
+     * @throws IllegalArgumentException if the URL is null or contains
+     *         a control character (such as CR/LF)
      */
     public static void redirect(String url) {
         redirect(302, url);
     }
 
     /**
-     * Sends a redirect with the given status code and URL.
+     * Sends a redirect with the given status code and URL. The URL may
+     * point anywhere; see {@link #redirectLocal(int, String)}.
      *
      * @param code the HTTP status code (e.g. 301, 302, 307)
      * @param url  the redirect target
-     * @throws IllegalArgumentException if the URL is null or contains CR/LF
+     * @throws IllegalArgumentException if the URL is null or contains
+     *         a control character (such as CR/LF)
      */
     public static void redirect(int code, String url) {
         validateLocation(url);
@@ -711,10 +768,47 @@ public final class Turismo {
     }
 
     /**
+     * Sends an HTTP 302 redirect to a path on this site. Use it when the
+     * target comes from the request, as in
+     * {@code redirectLocal(param("next"))}: an absolute URL
+     * ({@code https://evil.com}) or a protocol-relative one
+     * ({@code //evil.com}, {@code /\evil.com}) is rejected, so the
+     * parameter can't send users to another site.
+     *
+     * @param path the redirect target, a path starting with a single
+     *        {@code /}
+     * @throws IllegalArgumentException if path is not a local path, as
+     *         defined by {@link Validation#isLocalPath(String)}
+     */
+    public static void redirectLocal(String path) {
+        redirectLocal(302, path);
+    }
+
+    /**
+     * Sends a redirect with the given status code to a path on this
+     * site, as described in {@link #redirectLocal(String)}.
+     *
+     * @param code the HTTP status code (e.g. 302, 303, 307)
+     * @param path the redirect target, a path starting with a single
+     *        {@code /}
+     * @throws IllegalArgumentException if path is not a local path, as
+     *         defined by {@link Validation#isLocalPath(String)}
+     */
+    public static void redirectLocal(int code, String path) {
+        if (!Validation.isLocalPath(path)) {
+            throw new IllegalArgumentException(
+                    "Redirect target must be a local path "
+                    + "(possible open redirect)");
+        }
+        redirect(code, path);
+    }
+
+    /**
      * Sends an HTTP 301 (Moved Permanently) redirect.
      *
      * @param url the new URL
-     * @throws IllegalArgumentException if the URL is null or contains CR/LF
+     * @throws IllegalArgumentException if the URL is null or contains
+     *         a control character (such as CR/LF)
      */
     public static void movedPermanently(String url) {
         redirect(301, url);
@@ -811,11 +905,13 @@ public final class Turismo {
      */
     static Object[] bind(Context ctx, Map<String, String> params,
             int maxFormSize) {
-        Object[] previous = {CONTEXT.get(), PATH_PARAMS.get(), FORM.get()};
+        Object[] previous = {CONTEXT.get(), PATH_PARAMS.get(), FORM.get(),
+                TRANSPORT.get()};
         Form form = new Form(ctx, maxFormSize);
         CONTEXT.set(form.context());
         PATH_PARAMS.set(params);
         FORM.set(form);
+        TRANSPORT.set(ctx);
         return previous;
     }
 
@@ -825,10 +921,12 @@ public final class Turismo {
             CONTEXT.remove();
             PATH_PARAMS.remove();
             FORM.remove();
+            TRANSPORT.remove();
         } else {
             CONTEXT.set((Context) previous[0]);
             PATH_PARAMS.set((Map<String, String>) previous[1]);
             FORM.set((Form) previous[2]);
+            TRANSPORT.set((Context) previous[3]);
         }
     }
 
