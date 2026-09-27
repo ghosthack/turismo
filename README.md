@@ -200,21 +200,17 @@ otherwise goes wherever it is told. Never pass it a target from the request:
 `redirect(param("next"))` lets anyone craft a link to your site that sends
 users to `https://evil.com` or `//evil.com`. Use `redirectLocal()` instead,
 which accepts only a path on the same site (a single leading `/`; not
-`//host`, `/\host`, a scheme or control characters) and throws
-`IllegalArgumentException` otherwise. Catch it to fall back to a default:
+`//host`, `/\host`, a scheme or control characters) and answers anything
+else with `400`. To fall back to a default instead, check the target with
+`Validation.isLocalPath(String)` first:
 
 ```java
 post("/login", () -> {
     // ... authenticate ...
-    try {
-        redirectLocal(303, param("next"));
-    } catch (IllegalArgumentException e) {
-        redirect(303, "/");
-    }
+    String next = param("next");
+    redirect(303, Validation.isLocalPath(next) ? next : "/");
 });
 ```
-
-`Validation.isLocalPath(String)` performs the same check without redirecting.
 
 ### Streaming large responses
 
