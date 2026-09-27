@@ -244,8 +244,8 @@ public final class Turismo {
      * {@link PUT @PUT}, {@link DELETE @DELETE}, or {@link PATCH @PATCH},
      * and registers each as a route. Annotated methods declared in
      * superclasses are included; an annotated override in a subclass
-     * replaces the superclass's route. Route methods must take no
-     * parameters.
+     * replaces the superclass's route. Method arguments are bound from
+     * the request as described in {@link App#controller(Object)}.
      *
      * <pre>{@code
      * public class MyController {
@@ -260,7 +260,8 @@ public final class Turismo {
      *
      * @param instance the controller instance
      * @throws IllegalArgumentException if the instance has no annotated
-     *         methods, or an annotated method takes parameters
+     *         methods, or an annotated method has an argument that can't
+     *         be bound
      */
     public static void controller(Object instance) {
         APP.controller(instance);

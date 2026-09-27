@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import io.github.ghosthack.turismo.annotation.DELETE;
 import io.github.ghosthack.turismo.annotation.GET;
 import io.github.ghosthack.turismo.annotation.PATCH;
+import io.github.ghosthack.turismo.annotation.Param;
 import io.github.ghosthack.turismo.annotation.POST;
 import io.github.ghosthack.turismo.annotation.PUT;
 
@@ -869,13 +870,101 @@ public class TurismoTest {
     // ---------------------------------------------------------------
 
     @Test
-    public void testControllerRejectsMethodWithParameters() {
+    public void testControllerRejectsUnsupportedParameterType() {
         try {
-            Turismo.controller(new ParamController());
+            Turismo.controller(new UnsupportedParamController());
             fail("Expected IllegalArgumentException");
         } catch (IllegalArgumentException e) {
             assertTrue(e.getMessage().contains("withParam"));
+            assertTrue(e.getMessage().contains("java.util.List"));
         }
+    }
+
+    @Test
+    public void testControllerRejectsEmptyParamName() {
+        IllegalArgumentException e = assertThrows(
+                IllegalArgumentException.class,
+                () -> Turismo.controller(new EmptyParamNameController()));
+        assertTrue(e.getMessage().contains("@Param"));
+    }
+
+    @Test
+    public void testControllerBindsAnnotatedPathParam() {
+        Turismo.controller(new ArgsController());
+        MockContext ctx = new MockContext("GET", "/args/item/42");
+        Turismo.handle(ctx);
+        assertEquals("item: 43", ctx.printed.toString());
+    }
+
+    @Test
+    public void testControllerBindsParamByJavaName() {
+        // Relies on -parameters, enabled in pom.xml
+        Turismo.controller(new ArgsController());
+        MockContext ctx = new MockContext("GET", "/args/named/abc");
+        Turismo.handle(ctx);
+        assertEquals("name=abc", ctx.printed.toString());
+    }
+
+    @Test
+    public void testControllerBindsQueryParamsAndTypes() {
+        Turismo.controller(new ArgsController());
+        MockContext ctx = new MockContext("GET", "/args/types/RED");
+        ctx.queryParams.put("n", "9000000000");
+        ctx.queryParams.put("f", "true");
+        ctx.queryParams.put("d", "1.5");
+        ctx.queryParams.put("u", "123e4567-e89b-12d3-a456-426614174000");
+        Turismo.handle(ctx);
+        assertEquals("RED 9000000000 true 1.5 "
+                + "123e4567-e89b-12d3-a456-426614174000",
+                ctx.printed.toString());
+    }
+
+    @Test
+    public void testControllerMissingBoxedParamIsNull() {
+        Turismo.controller(new ArgsController());
+        MockContext ctx = new MockContext("GET", "/args/optional");
+        Turismo.handle(ctx);
+        assertEquals("page=null q=null", ctx.printed.toString());
+    }
+
+    @Test
+    public void testControllerMissingPrimitiveParamIs400() {
+        Turismo.controller(new ArgsController());
+        MockContext ctx = new MockContext("GET", "/args/required");
+        Turismo.handle(ctx);
+        assertEquals(400, ctx.statusCode);
+        assertEquals("Bad Request: missing parameter 'limit'",
+                ctx.printed.toString());
+    }
+
+    @Test
+    public void testControllerInvalidParamIs400() {
+        Turismo.controller(new ArgsController());
+        MockContext ctx = new MockContext("GET", "/args/item/abc");
+        Turismo.handle(ctx);
+        assertEquals(400, ctx.statusCode);
+        assertEquals("Bad Request: invalid value for parameter 'id'",
+                ctx.printed.toString());
+    }
+
+    @Test
+    public void testControllerInvalidEnumAndBooleanAre400() {
+        Turismo.controller(new ArgsController());
+        MockContext badEnum = new MockContext("GET", "/args/types/PURPLE");
+        Turismo.handle(badEnum);
+        assertEquals(400, badEnum.statusCode);
+        MockContext badBool = new MockContext("GET", "/args/types/RED");
+        badBool.queryParams.put("f", "yes");
+        Turismo.handle(badBool);
+        assertEquals(400, badBool.statusCode);
+    }
+
+    @Test
+    public void testControllerBindsContextAndBody() {
+        Turismo.controller(new ArgsController());
+        MockContext ctx = new MockContext("POST", "/args/echo");
+        Turismo.handle(ctx);
+        assertEquals("POST body=true", ctx.printed.toString());
     }
 
     @Test
@@ -908,9 +997,50 @@ public class TurismoTest {
         assertEquals("plain override", ctx.printed.toString());
     }
 
-    static class ParamController {
+    static class UnsupportedParamController {
         @GET("/p")
-        void withParam(String s) {
+        void withParam(List<String> s) {
+        }
+    }
+
+    static class EmptyParamNameController {
+        @GET("/p/:id")
+        void withParam(@Param("") String id) {
+        }
+    }
+
+    enum Shade { RED, GREEN }
+
+    static class ArgsController {
+        @GET("/args/item/:id")
+        void item(@Param("id") int id) {
+            Turismo.print("item: " + (id + 1));
+        }
+
+        @GET("/args/named/:name")
+        void named(String name) {
+            Turismo.print("name=", name);
+        }
+
+        @GET("/args/types/:color")
+        void types(Shade color, @Param("n") long n, @Param("f") boolean f,
+                @Param("d") double d, @Param("u") java.util.UUID u) {
+            Turismo.print(color + " " + n + " " + f + " " + d + " " + u);
+        }
+
+        @GET("/args/optional")
+        void optional(Integer page, String q) {
+            Turismo.print("page=" + page + " q=" + q);
+        }
+
+        @GET("/args/required")
+        void required(int limit) {
+            Turismo.print("limit=" + limit);
+        }
+
+        @POST("/args/echo")
+        void echo(Context ctx, InputStream body) {
+            Turismo.print(ctx.method() + " body=" + (body != null));
         }
     }
 

@@ -203,10 +203,38 @@ controller(new UserController());
 start(8080);
 ```
 
-Route methods take no parameters (read them with `param()` and friends);
-`controller()` rejects any that do. Annotated methods inherited from a
-superclass are registered too, and an annotated override in a subclass
-replaces the superclass's route.
+Annotated methods inherited from a superclass are registered too, and an
+annotated override in a subclass replaces the superclass's route.
+
+### Method arguments
+
+Instead of calling `param()`, a route method can take the parameters as
+arguments. Each is looked up like `param()` (path parameter, then query
+string) and converted to the argument type:
+
+```java
+@GET("/items/:id")
+void getItem(@Param("id") int id) {
+    print("item: " + id);
+}
+
+@GET("/search")                          // /search?q=shoes&page=2
+void search(@Param("q") String q, @Param("page") Integer page) {
+    print(q + " page " + (page != null ? page : 1));
+}
+```
+
+- Supported types: `String`, primitives and their wrappers, enums (by
+  constant name) and `UUID`. A `Context` argument receives the request
+  context and an `InputStream` argument the request body.
+- A value that can't be converted (`/items/abc` for an `int`), or a
+  missing value for a primitive, gets `400 Bad Request`. A missing value
+  for any other type is passed as `null`.
+- `@Param` can be left out when the controller is compiled with
+  `-parameters` (`<parameters>true</parameters>` in `maven-compiler-plugin`,
+  `options.compilerArgs << '-parameters'` in Gradle); the Java parameter
+  name is used then. Otherwise `controller()` rejects the method, as it
+  does an argument of an unsupported type.
 
 Controller routes use the same routing engine as lambda routes and can be
 freely mixed. All request/response methods (`param()`, `print()`, `json()`,
@@ -414,7 +442,8 @@ a `Content-Type` is reported as `application/octet-stream`.
     unsupported charset.
   - Requests without `Content-Length` are accepted.
 
-New in 5.0: `App` instances ([Multiple apps](#multiple-apps)), graceful
+New in 5.0: `App` instances ([Multiple apps](#multiple-apps)), controller
+method arguments ([Method arguments](#method-arguments)), graceful
 `stop(Duration)`, logging of handler errors, and JSON support for records,
 enums, `Character` and all array types.
 
