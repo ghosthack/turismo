@@ -6,6 +6,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -632,6 +633,143 @@ public class TurismoTest {
     }
 
     // ---------------------------------------------------------------
+    // Form bodies
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testFormField() {
+        Turismo.post("/f", () -> Turismo.print(Turismo.form("name") + "|"
+                + Turismo.form("note") + "|" + Turismo.form("missing")));
+        MockContext ctx = new MockContext("POST", "/f")
+                .form("name=Ana+Mar%C3%ADa&note=a%26b%3Dc");
+        Turismo.handle(ctx);
+        assertEquals("Ana María|a&b=c|null", ctx.printed.toString());
+    }
+
+    @Test
+    public void testFormRawUtf8AndCharsetParameter() {
+        Turismo.post("/f", () -> Turismo.print(Turismo.form("name")));
+        MockContext utf8 = new MockContext("POST", "/f").form("name=José");
+        Turismo.handle(utf8);
+        assertEquals("José", utf8.printed.toString());
+
+        MockContext latin1 = new MockContext("POST", "/f");
+        latin1.requestHeaders.put("Content-Type",
+                "application/x-www-form-urlencoded; charset=ISO-8859-1");
+        latin1.requestBody = "name=Jos%E9".getBytes(StandardCharsets.US_ASCII);
+        Turismo.handle(latin1);
+        assertEquals("José", latin1.printed.toString());
+    }
+
+    @Test
+    public void testFormsMapKeepsFirstValueAndSkipsEmptyPairs() {
+        Turismo.post("/f", () -> Turismo.print(Turismo.forms().toString()));
+        MockContext ctx = new MockContext("POST", "/f").form("a=1&&b&a=2");
+        Turismo.handle(ctx);
+        assertEquals("{a=1, b=}", ctx.printed.toString());
+    }
+
+    @Test
+    public void testParamFallsBackToForm() {
+        Turismo.post("/f/:id", () -> Turismo.print(Turismo.param("id") + " "
+                + Turismo.param("q") + " " + Turismo.param("name")));
+        MockContext ctx = new MockContext("POST", "/f/7")
+                .form("id=body&q=body&name=Ana");
+        ctx.queryParams.put("q", "query");
+        Turismo.handle(ctx);
+        assertEquals("7 query Ana", ctx.printed.toString());
+    }
+
+    @Test
+    public void testFormIgnoresOtherContentTypes() {
+        Turismo.post("/f", () -> {
+            Turismo.print(Turismo.form("a") + " " + Turismo.forms().size()
+                    + " ");
+            try {
+                Turismo.print(new String(Turismo.body().readAllBytes(),
+                        StandardCharsets.UTF_8));
+            } catch (java.io.IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
+        });
+        MockContext ctx = new MockContext("POST", "/f");
+        ctx.requestHeaders.put("Content-Type", "application/json");
+        ctx.requestBody = "a=1".getBytes(StandardCharsets.UTF_8);
+        Turismo.handle(ctx);
+        assertEquals("null 0 a=1", ctx.printed.toString());
+    }
+
+    @Test
+    public void testBodyReadableAfterFormParsed() throws Exception {
+        Turismo.post("/f", () -> {
+            Turismo.form("a");
+            try {
+                Turismo.print(new String(Turismo.body().readAllBytes(),
+                        StandardCharsets.UTF_8));
+            } catch (java.io.IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
+        });
+        MockContext ctx = new MockContext("POST", "/f").form("a=1&b=2");
+        Turismo.handle(ctx);
+        assertEquals("a=1&b=2", ctx.printed.toString());
+    }
+
+    @Test
+    public void testFormTooLargeIs413() {
+        App app = new App();
+        app.setMaxFormSize(8);
+        app.post("/f", () -> Turismo.print("got " + Turismo.form("a")));
+        MockContext ok = new MockContext("POST", "/f").form("a=123456");
+        app.handle(ok);
+        assertEquals("got 123456", ok.printed.toString());
+
+        MockContext big = new MockContext("POST", "/f").form("a=1234567");
+        app.handle(big);
+        assertEquals(413, big.statusCode);
+        assertEquals("Content Too Large", big.printed.toString());
+
+        MockContext declared = new MockContext("POST", "/f").form("a=1");
+        declared.requestHeaders.put("Content-Length", "100");
+        app.handle(declared);
+        assertEquals(413, declared.statusCode);
+    }
+
+    @Test
+    public void testMalformedFormIs400() {
+        Turismo.post("/f", () -> Turismo.print("got " + Turismo.form("a")));
+        MockContext ctx = new MockContext("POST", "/f").form("a=%zz");
+        Turismo.handle(ctx);
+        assertEquals(400, ctx.statusCode);
+        assertEquals("Bad Request: malformed form body",
+                ctx.printed.toString());
+
+        MockContext charset = new MockContext("POST", "/f").form("a=1");
+        charset.requestHeaders.put("Content-Type",
+                "application/x-www-form-urlencoded; charset=nope");
+        Turismo.handle(charset);
+        assertEquals(400, charset.statusCode);
+    }
+
+    @Test
+    public void testSetMaxFormSizeRejectsOutOfRange() {
+        App app = new App();
+        assertThrows(IllegalArgumentException.class,
+                () -> app.setMaxFormSize(-1));
+        assertThrows(IllegalArgumentException.class,
+                () -> app.setMaxFormSize(Integer.MAX_VALUE));
+    }
+
+    @Test
+    public void testControllerBindsFormFields() {
+        Turismo.controller(new ArgsController());
+        MockContext ctx = new MockContext("POST", "/args/signup")
+                .form("email=a%40b.c&age=30&newsletter=true");
+        Turismo.handle(ctx);
+        assertEquals("a@b.c 30 true", ctx.printed.toString());
+    }
+
+    // ---------------------------------------------------------------
     // HEAD, 405, encoded paths
     // ---------------------------------------------------------------
 
@@ -1038,6 +1176,11 @@ public class TurismoTest {
             Turismo.print("limit=" + limit);
         }
 
+        @POST("/args/signup")
+        void signup(String email, int age, boolean newsletter) {
+            Turismo.print(email + " " + age + " " + newsletter);
+        }
+
         @POST("/args/echo")
         void echo(Context ctx, InputStream body) {
             Turismo.print(ctx.method() + " body=" + (body != null));
@@ -1123,6 +1266,7 @@ public class TurismoTest {
         final String path;
         final Map<String, String> queryParams = new HashMap<>();
         final Map<String, String> requestHeaders = new HashMap<>();
+        byte[] requestBody = new byte[0];
         final Map<String, String> responseHeaders = new HashMap<>();
         final StringBuilder printed = new StringBuilder();
         final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -1134,12 +1278,20 @@ public class TurismoTest {
             this.path = path;
         }
 
+        /** Sets a urlencoded form body with its Content-Type. */
+        MockContext form(String body) {
+            requestHeaders.put("Content-Type",
+                    "application/x-www-form-urlencoded");
+            requestBody = body.getBytes(StandardCharsets.UTF_8);
+            return this;
+        }
+
         @Override public String method() { return method; }
         @Override public String rawPath() { return rawPath; }
         @Override public String path() { return path; }
         @Override public String query(String name) { return queryParams.get(name); }
         @Override public String header(String name) { return requestHeaders.get(name); }
-        @Override public InputStream body() { return new ByteArrayInputStream(new byte[0]); }
+        @Override public InputStream body() { return new ByteArrayInputStream(requestBody); }
         @Override public void status(int code) { this.statusCode = code; }
         @Override public void header(String name, String value) { responseHeaders.put(name, value); }
         @Override public void print(String text) { printed.append(text); }

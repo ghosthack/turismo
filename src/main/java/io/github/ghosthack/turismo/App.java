@@ -69,7 +69,11 @@ public class App {
     private final Map<String, Map<String, Runnable>> exact =
             new ConcurrentHashMap<>();
     private final List<PatternRoute> patterns = new CopyOnWriteArrayList<>();
+    /** Default for {@link #setMaxFormSize}: 2 MB. */
+    static final int DEFAULT_MAX_FORM_SIZE = 2 * 1024 * 1024;
+
     private volatile Runnable notFound = Turismo::defaultNotFound;
+    private volatile int maxFormSize = DEFAULT_MAX_FORM_SIZE;
     private Server server;
 
     /** Creates an app with no routes. */
@@ -215,6 +219,24 @@ public class App {
     }
 
     /**
+     * Sets the largest {@code application/x-www-form-urlencoded} request
+     * body that {@link Turismo#form(String)} and {@link Turismo#param(String)}
+     * will read; larger ones are answered with {@code 413 Content Too
+     * Large}. The default is 2 MB.
+     *
+     * @param bytes the limit in bytes
+     * @throws IllegalArgumentException if bytes is negative or
+     *         {@code Integer.MAX_VALUE}
+     */
+    public void setMaxFormSize(int bytes) {
+        if (bytes < 0 || bytes == Integer.MAX_VALUE) {
+            throw new IllegalArgumentException(
+                    "max form size out of range: " + bytes);
+        }
+        this.maxFormSize = bytes;
+    }
+
+    /**
      * Registers a route for a specific HTTP method and path pattern.
      * Paths containing {@code :} or {@code *} are treated as pattern
      * routes; all others are exact-match routes resolved in O(1).
@@ -256,8 +278,8 @@ public class App {
      * superclasses are included; an annotated override in a subclass
      * replaces the superclass's route.
      *
-     * <p>Route method arguments are bound from the request: path and
-     * query parameters by name (see {@link io.github.ghosthack.turismo.annotation.Param
+     * <p>Route method arguments are bound from the request: path, query
+     * and form parameters by name (see {@link io.github.ghosthack.turismo.annotation.Param
      * @Param}), converted to {@code String}, primitives and their
      * wrappers, enums or {@code UUID}; a {@link Context} argument gets the
      * request context and an {@code InputStream} argument the request
@@ -439,9 +461,12 @@ public class App {
      */
     public void handle(Context ctx) {
         RouteMatch match = resolve(ctx.method(), ctx.path(), ctx.rawPath());
-        Object[] previous = Turismo.bind(ctx, match.params);
+        Object[] previous = Turismo.bind(ctx, match.params, maxFormSize);
         try {
             match.action.run();
+        } catch (RequestException e) {
+            ctx.status(e.status());
+            ctx.print(e.getMessage());
         } finally {
             Turismo.restore(previous);
         }
@@ -449,13 +474,14 @@ public class App {
 
     /**
      * Clears all registered routes, restores the default not-found
-     * handler, and stops the server if running.
+     * handler and form size limit, and stops the server if running.
      */
     public void reset() {
         stop();
         exact.clear();
         patterns.clear();
         notFound = Turismo::defaultNotFound;
+        maxFormSize = DEFAULT_MAX_FORM_SIZE;
     }
 
     // ---------------------------------------------------------------

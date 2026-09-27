@@ -34,7 +34,8 @@ import io.github.ghosthack.turismo.annotation.Param;
  * one of type {@link InputStream} gets the request body. Any other
  * argument is a request parameter, named by {@link Param @Param} or by
  * the Java parameter name (compiled with {@code -parameters}), and is
- * read with {@link Turismo#param(String)} and converted to the argument
+ * read with {@link Turismo#param(String)} (path, query, then form
+ * parameters) and converted to the argument
  * type: {@code String}, a primitive or its wrapper, an enum (by constant
  * name) or {@link UUID}.
  *
@@ -64,13 +65,7 @@ final class RouteMethod implements Runnable {
     public void run() {
         Object[] args = new Object[binders.length];
         for (int i = 0; i < binders.length; i++) {
-            try {
-                args[i] = binders[i].get();
-            } catch (BadParameterException e) {
-                Turismo.status(400);
-                Turismo.print("Bad Request: ", e.getMessage());
-                return;
-            }
+            args[i] = binders[i].get();
         }
         try {
             method.invoke(instance, args);
@@ -107,8 +102,8 @@ final class RouteMethod implements Runnable {
             String value = Turismo.param(name);
             if (value == null) {
                 if (type.isPrimitive()) {
-                    throw new BadParameterException(
-                            "missing parameter '" + name + "'");
+                    throw new RequestException(400,
+                            "Bad Request: missing parameter '" + name + "'");
                 }
                 return null;
             }
@@ -116,8 +111,8 @@ final class RouteMethod implements Runnable {
                 return converter.apply(value);
             } catch (IllegalArgumentException e) {
                 // Includes NumberFormatException
-                throw new BadParameterException(
-                        "invalid value for parameter '" + name + "'");
+                throw new RequestException(400, "Bad Request: "
+                        + "invalid value for parameter '" + name + "'");
             }
         };
     }
@@ -175,12 +170,5 @@ final class RouteMethod implements Runnable {
         if ("true".equalsIgnoreCase(s)) return Boolean.TRUE;
         if ("false".equalsIgnoreCase(s)) return Boolean.FALSE;
         throw new IllegalArgumentException();
-    }
-
-    /** A request parameter that can't be bound; answered with 400. */
-    private static final class BadParameterException extends RuntimeException {
-        BadParameterException(String message) {
-            super(message, null, false, false);
-        }
     }
 }
