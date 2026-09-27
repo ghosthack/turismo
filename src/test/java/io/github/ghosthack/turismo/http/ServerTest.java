@@ -450,6 +450,24 @@ public class ServerTest {
     }
 
     @Test
+    public void testRepeatedQueryParameters() throws Exception {
+        Turismo.get("/tags", () -> Turismo.print(Turismo.param("tag") + " "
+                + Turismo.paramValues("tag") + " "
+                + Turismo.queryValues("empty").size() + " "
+                + Turismo.queryValues("none").size()));
+        Server server = startServer();
+        try {
+            HttpResult result = fetch("GET", "http://localhost:" + server.port()
+                    + "/tags?tag=b&tag=a%20c&&empty&tag=b");
+            assertEquals(200, result.status);
+            // "empty" has no '=': present once, with an empty value
+            assertEquals("b [b, a c, b] 1 0", result.body);
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test
     public void testFormErrorReplacesPartialOutput() throws Exception {
         Turismo.app().setMaxFormSize(4);
         Turismo.post("/login", () -> {

@@ -1354,6 +1354,8 @@ public class TurismoTest {
         final String method;
         final String path;
         final Map<String, String> queryParams = new HashMap<>();
+        /** Repeated query values; takes precedence over queryParams. */
+        final Map<String, List<String>> repeatedQuery = new HashMap<>();
         final Map<String, String> requestHeaders = new HashMap<>();
         byte[] requestBody = new byte[0];
         final Map<String, String> responseHeaders = new HashMap<>();
@@ -1381,7 +1383,14 @@ public class TurismoTest {
         @Override public String method() { return method; }
         @Override public String rawPath() { return rawPath; }
         @Override public String path() { return path; }
-        @Override public String query(String name) { return queryParams.get(name); }
+        @Override public String query(String name) {
+            List<String> values = repeatedQuery.get(name);
+            return values != null ? values.get(0) : queryParams.get(name);
+        }
+        @Override public List<String> queryValues(String name) {
+            List<String> values = repeatedQuery.get(name);
+            return values != null ? values : Context.super.queryValues(name);
+        }
         @Override public String header(String name) { return requestHeaders.get(name); }
         @Override public InputStream body() {
             if (!singleUseBody) {

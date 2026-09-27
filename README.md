@@ -88,6 +88,14 @@ get("/search", () -> {
 });
 ```
 
+For a name that repeats (`?tag=a&tag=b`), `param()` returns the first value
+and `paramValues()` returns all of them (`queryValues()` and `formValues()`
+look in one place only):
+
+```java
+get("/filter", () -> print(String.join(",", paramValues("tag"))));
+```
+
 ### Form bodies
 
 Fields of an `application/x-www-form-urlencoded` body (what an HTML form
@@ -102,11 +110,12 @@ post("/login", () -> {
 });
 ```
 
-The body is read on first use and decoded with the request's charset
-(UTF-8 by default); if a name repeats, the first value wins. `body()` still
-returns the full body afterwards. The reverse order doesn't work: once a
-handler has taken the raw `body()` stream of a form request, `form()` and a
-`param()` that falls through to the form throw `IllegalStateException`. Bodies over 2 MB get `413 Content Too
+The body is read on first use and decoded with the request's charset (UTF-8
+by default); if a name repeats, `form()` returns the first value and
+`formValues()` all of them. `body()` still returns the full body afterwards.
+The reverse order doesn't work: once a handler has taken the raw `body()`
+stream of a form request, `form()` and a `param()` that falls through to the
+form throw `IllegalStateException`. Bodies over 2 MB get `413 Content Too
 Large` (change the limit with `app().setMaxFormSize(bytes)`), and malformed
 ones `400 Bad Request`. Other content types are left alone: `form()` returns
 `null` and the body isn't read. For `multipart/form-data` (servlet
@@ -256,14 +265,26 @@ void search(@Param("q") String q, @Param("page") Integer page) {
 void signup(@Param("email") String email, @Param("age") int age) {
     print(email + " is " + age);
 }
+
+@GET("/cart")                            // ?sku=A1&sku=B2&qty=1&qty=3
+void cart(String[] sku, int[] qty, BigDecimal discount, Boolean gift) {
+    ...
+}
 ```
 
-- Supported types: `String`, primitives and their wrappers, enums (by
-  constant name) and `UUID`. A `Context` argument receives the request
-  context and an `InputStream` argument the request body.
+- Supported types: `String`, primitives and their wrappers (`boolean` and
+  `Boolean` accept `true`/`false` in any case), `BigInteger`, `BigDecimal`,
+  enums (by constant name) and `UUID`. A `Context` argument receives the
+  request context and an `InputStream` argument the request body.
+- An array of any of those (`String[]`, `int[]`, `Boolean[]`,
+  `BigDecimal[]`, ...) receives every value of a repeated parameter, in
+  order; if the parameter is absent the array is empty.
 - A value that can't be converted (`/items/abc` for an `int`), or a
   missing value for a primitive, gets `400 Bad Request`. A missing value
   for any other type is passed as `null`.
+- `BigInteger` and `BigDecimal` values are limited to 1000 characters, and a
+  `BigDecimal` exponent to ±1000, since parsing or printing far larger
+  numbers could tie up the server; longer values get `400`.
 - Without `@Param`, the Java parameter name is used. turismo reads it from
   the class file, which records it when the controller is compiled with
   debug information (`-g`, the default in Maven, Gradle and IDEs) or with
@@ -464,6 +485,9 @@ a `Content-Type` is reported as `application/octet-stream`.
 - **Encoded slashes**: `/admin%2Fsecret` no longer matches an exact
   `/admin/secret` route (it could be used to get past path-based access
   rules in a proxy).
+- **Repeated query parameters**: `param()` and `query()` return the first
+  value of a repeated name (`?a=1&a=2` gives `1`); 4.x returned the last.
+  `paramValues()`/`queryValues()` return all of them.
 - **Route validation**: `route()`, `get()`, ... reject a null method,
   path or action, and paths that don't start with `/`; `notFound(null)` is
   rejected too.

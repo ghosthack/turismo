@@ -18,6 +18,7 @@ package io.github.ghosthack.turismo;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.List;
 
 /**
  * Transport-neutral HTTP request/response context. Provides access to the
@@ -61,12 +62,27 @@ public interface Context {
     }
 
     /**
-     * Returns a query string parameter value by name.
+     * Returns a query string parameter value by name. If the name is
+     * repeated, implementations should return the first value.
      *
      * @param name the parameter name
      * @return the value, or {@code null} if not present
      */
     String query(String name);
+
+    /**
+     * Returns every value of a query string parameter, in order, for
+     * names that repeat ({@code ?tag=a&tag=b}). The default returns just
+     * {@link #query(String)}; implementations that keep repeated values
+     * override it.
+     *
+     * @param name the parameter name
+     * @return the values; empty if not present
+     */
+    default List<String> queryValues(String name) {
+        String value = query(name);
+        return value == null ? List.of() : List.of(value);
+    }
 
     /**
      * Returns a request header value by name.

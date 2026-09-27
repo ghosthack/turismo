@@ -22,7 +22,10 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import com.sun.net.httpserver.HttpExchange;
@@ -44,7 +47,7 @@ public class HttpContext implements Context {
     private final HttpExchange exchange;
     private int statusCode = 200;
     private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-    private Map<String, String> queryParams;
+    private Map<String, List<String>> queryParams;
 
     /**
      * Creates a context wrapping the given HTTP exchange.
@@ -72,10 +75,16 @@ public class HttpContext implements Context {
 
     @Override
     public String query(String name) {
+        List<String> values = queryValues(name);
+        return values.isEmpty() ? null : values.get(0);
+    }
+
+    @Override
+    public List<String> queryValues(String name) {
         if (queryParams == null) {
             queryParams = parseQuery(exchange.getRequestURI().getRawQuery());
         }
-        return queryParams.get(name);
+        return queryParams.getOrDefault(name, List.of());
     }
 
     @Override
@@ -148,21 +157,21 @@ public class HttpContext implements Context {
                 && statusCode >= 200 && statusCode != 204 && statusCode != 304;
     }
 
-    private static Map<String, String> parseQuery(String query) {
-        Map<String, String> params = new LinkedHashMap<>();
+    private static Map<String, List<String>> parseQuery(String query) {
+        Map<String, List<String>> params = new LinkedHashMap<>();
         if (query == null || query.isEmpty()) {
             return params;
         }
         for (String pair : query.split("&")) {
-            int eq = pair.indexOf('=');
-            if (eq >= 0) {
-                String key = decode(pair.substring(0, eq));
-                String value = decode(pair.substring(eq + 1));
-                params.put(key, value);
-            } else {
-                params.put(decode(pair), "");
+            if (pair.isEmpty()) {
+                continue;
             }
+            int eq = pair.indexOf('=');
+            String key = decode(eq < 0 ? pair : pair.substring(0, eq));
+            String value = eq < 0 ? "" : decode(pair.substring(eq + 1));
+            params.computeIfAbsent(key, k -> new ArrayList<>()).add(value);
         }
+        params.replaceAll((k, v) -> Collections.unmodifiableList(v));
         return params;
     }
 

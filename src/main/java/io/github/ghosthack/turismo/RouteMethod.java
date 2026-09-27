@@ -17,9 +17,13 @@
 package io.github.ghosthack.turismo;
 
 import java.io.InputStream;
+import java.lang.reflect.Array;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.util.List;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -35,13 +39,18 @@ import io.github.ghosthack.turismo.annotation.Param;
  * argument is a request parameter, named by {@link Param @Param} or by
  * the Java parameter name, and is
  * read with {@link Turismo#param(String)} (path, query, then form
- * parameters) and converted to the argument
- * type: {@code String}, a primitive or its wrapper, an enum (by constant
- * name) or {@link UUID}.
+ * parameters) and converted to the argument type: {@code String}, a
+ * primitive or its wrapper, {@link BigInteger}, {@link BigDecimal}, an
+ * enum (by constant name) or {@link UUID}. An array of any of these
+ * collects every value of a repeated parameter
+ * ({@link Turismo#paramValues(String)}).
  *
  * <p>A value that can't be converted, or a missing value for a
  * primitive argument, is answered with {@code 400 Bad Request}; a missing
- * value for any other type is passed as {@code null}.
+ * value for any other type is passed as {@code null}, and a missing array
+ * parameter as an empty array. Big numbers are limited to
+ * {@value #MAX_BIG_NUMBER} characters (and a {@code BigDecimal} to that
+ * scale magnitude).
  *
  * <p>Java parameter names come from the {@code MethodParameters} attribute
  * ({@code javac -parameters}) or, failing that, from the class file's
@@ -99,11 +108,12 @@ final class RouteMethod implements Runnable {
             return () -> Turismo.body();
         }
         String name = parameterName(p, index);
+        if (type.isArray()) {
+            return arrayBinder(type.getComponentType(), name);
+        }
         Function<String, Object> converter = converter(type);
         if (converter == null) {
-            throw new IllegalArgumentException("Unsupported type "
-                    + type.getName() + " for parameter '" + name + "' of "
-                    + describe());
+            throw unsupported(type, name);
         }
         return () -> {
             String value = Turismo.param(name);
@@ -117,11 +127,46 @@ final class RouteMethod implements Runnable {
             try {
                 return converter.apply(value);
             } catch (IllegalArgumentException e) {
-                // Includes NumberFormatException
-                throw new RequestException(400, "Bad Request: "
-                        + "invalid value for parameter '" + name + "'");
+                throw invalid(name);
             }
         };
+    }
+
+    /**
+     * Binds every value of a repeated parameter ({@code ?tag=a&tag=b}) to
+     * an array; a missing parameter gives an empty array.
+     */
+    private Supplier<Object> arrayBinder(Class<?> component, String name) {
+        Function<String, Object> converter = converter(component);
+        if (converter == null) {
+            throw unsupported(component.arrayType(), name);
+        }
+        return () -> {
+            List<String> values = Turismo.paramValues(name);
+            Object array = Array.newInstance(component, values.size());
+            for (int i = 0; i < values.size(); i++) {
+                try {
+                    // Array.set unboxes into primitive arrays
+                    Array.set(array, i, converter.apply(values.get(i)));
+                } catch (IllegalArgumentException e) {
+                    throw invalid(name);
+                }
+            }
+            return array;
+        };
+    }
+
+    private IllegalArgumentException unsupported(Class<?> type, String name) {
+        return new IllegalArgumentException("Unsupported type "
+                + type.getTypeName() + " for parameter '" + name + "' of "
+                + describe());
+    }
+
+    private static RequestException invalid(String name) {
+        // Also covers NumberFormatException, a subclass of
+        // IllegalArgumentException, from the converters
+        return new RequestException(400, "Bad Request: "
+                + "invalid value for parameter '" + name + "'");
     }
 
     private String parameterName(Parameter p, int index) {
@@ -174,10 +219,39 @@ final class RouteMethod implements Runnable {
             };
         }
         if (type == UUID.class) return UUID::fromString;
+        if (type == BigInteger.class) {
+            return s -> new BigInteger(checkLength(s));
+        }
+        if (type == BigDecimal.class) return RouteMethod::parseBigDecimal;
         if (type.isEnum()) {
             return s -> Enum.valueOf((Class<? extends Enum>) type, s);
         }
         return null;
+    }
+
+    /**
+     * Longest value accepted for a {@code BigInteger} or {@code BigDecimal}
+     * argument, and the largest scale magnitude of a {@code BigDecimal}.
+     * Parsing and printing numbers far beyond these grows much faster than
+     * the input (a 20-character {@code 1e999999999} prints as a billion
+     * digits), so a request could otherwise tie up a thread or exhaust
+     * memory.
+     */
+    static final int MAX_BIG_NUMBER = 1000;
+
+    private static String checkLength(String s) {
+        if (s.length() > MAX_BIG_NUMBER) {
+            throw new IllegalArgumentException("number too long");
+        }
+        return s;
+    }
+
+    private static BigDecimal parseBigDecimal(String s) {
+        BigDecimal value = new BigDecimal(checkLength(s));
+        if (Math.abs((long) value.scale()) > MAX_BIG_NUMBER) {
+            throw new IllegalArgumentException("exponent out of range");
+        }
+        return value;
     }
 
     /** Strict boolean parsing: unlike Boolean.valueOf, rejects "yes". */

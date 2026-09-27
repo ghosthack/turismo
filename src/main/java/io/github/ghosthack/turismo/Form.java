@@ -24,8 +24,10 @@ import java.io.UncheckedIOException;
 import java.net.URLDecoder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -48,6 +50,7 @@ final class Form {
     private final Context ctx;
     private final int maxSize;
     private final Context view = new View();
+    private Map<String, List<String>> values;
     private Map<String, String> fields;
     private byte[] bytes;
     private boolean rawBodyTaken;
@@ -57,15 +60,32 @@ final class Form {
         this.maxSize = maxSize;
     }
 
-    /** Returns a form field, or null if absent or not a form request. */
+    /**
+     * Returns a form field's first value, or null if absent or not a
+     * form request.
+     */
     String get(String name) {
-        return fields().get(name);
+        List<String> v = values(name);
+        return v.isEmpty() ? null : v.get(0);
     }
 
-    /** Returns all form fields; empty if not a form request. */
+    /** Returns every value of a form field, in order; empty if absent. */
+    List<String> values(String name) {
+        if (values == null) {
+            values = parse();
+        }
+        return values.getOrDefault(name, List.of());
+    }
+
+    /** Returns each form field's first value; empty if not a form request. */
     Map<String, String> fields() {
         if (fields == null) {
-            fields = parse();
+            if (values == null) {
+                values = parse();
+            }
+            Map<String, String> first = new LinkedHashMap<>();
+            values.forEach((k, v) -> first.put(k, v.get(0)));
+            fields = Collections.unmodifiableMap(first);
         }
         return fields;
     }
@@ -84,15 +104,15 @@ final class Form {
         return view;
     }
 
-    private Map<String, String> parse() {
+    private Map<String, List<String>> parse() {
         String type = ctx.header("Content-Type");
         if (type == null) {
-            return Collections.emptyMap();
+            return Map.of();
         }
         int semi = type.indexOf(';');
         String mime = (semi < 0 ? type : type.substring(0, semi)).trim();
         if (!CONTENT_TYPE.equalsIgnoreCase(mime)) {
-            return Collections.emptyMap();
+            return Map.of();
         }
         if (rawBodyTaken) {
             throw new IllegalStateException("Form fields are unavailable: "
@@ -101,8 +121,7 @@ final class Form {
         }
         Charset charset = charset(semi < 0 ? "" : type.substring(semi + 1));
         bytes = read();
-        return Collections.unmodifiableMap(
-                decode(new String(bytes, charset), charset));
+        return decode(new String(bytes, charset), charset);
     }
 
     private byte[] read() {
@@ -162,6 +181,9 @@ final class Form {
         @Override public String path() { return ctx.path(); }
         @Override public String rawPath() { return ctx.rawPath(); }
         @Override public String query(String name) { return ctx.query(name); }
+        @Override public List<String> queryValues(String name) {
+            return ctx.queryValues(name);
+        }
         @Override public String header(String name) { return ctx.header(name); }
         @Override public InputStream body() { return Form.this.body(); }
         @Override public void status(int code) { ctx.status(code); }
@@ -175,10 +197,11 @@ final class Form {
 
     /**
      * Decodes {@code name=value&...} pairs, {@code %XX} escapes with the
-     * request's charset. A repeated name keeps its first value.
+     * request's charset. A repeated name keeps all its values, in order.
      */
-    private static Map<String, String> decode(String body, Charset charset) {
-        Map<String, String> fields = new LinkedHashMap<>();
+    private static Map<String, List<String>> decode(String body,
+            Charset charset) {
+        Map<String, List<String>> fields = new LinkedHashMap<>();
         if (body.isEmpty()) {
             return fields;
         }
@@ -190,13 +213,15 @@ final class Form {
                 int eq = pair.indexOf('=');
                 String name = eq < 0 ? pair : pair.substring(0, eq);
                 String value = eq < 0 ? "" : pair.substring(eq + 1);
-                fields.putIfAbsent(URLDecoder.decode(name, charset),
-                        URLDecoder.decode(value, charset));
+                fields.computeIfAbsent(URLDecoder.decode(name, charset),
+                        k -> new ArrayList<>())
+                        .add(URLDecoder.decode(value, charset));
             }
         } catch (IllegalArgumentException e) {
             throw new RequestException(400,
                     "Bad Request: malformed form body");
         }
-        return fields;
+        fields.replaceAll((k, v) -> Collections.unmodifiableList(v));
+        return Collections.unmodifiableMap(fields);
     }
 }
