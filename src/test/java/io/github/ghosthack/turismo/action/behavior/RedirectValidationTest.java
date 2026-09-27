@@ -21,6 +21,15 @@ public class RedirectValidationTest {
     }
 
     @Test
+    public void testLocationWithOtherControlChars() {
+        for (String location : new String[] {
+                "/a\tb", "/a\u0000b", "/a\u001fb", "/a\u007fb"}) {
+            assertThrows(IllegalArgumentException.class,
+                    () -> Redirect.validateLocation(location), location);
+        }
+    }
+
+    @Test
     public void testLocationWithCR() {
         assertThrows(IllegalArgumentException.class, () -> {
             Redirect.validateLocation("/path\rX-Injected: true");

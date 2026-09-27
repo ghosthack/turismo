@@ -20,6 +20,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -38,7 +39,8 @@ import io.github.ghosthack.turismo.Context;
  *
  * <p>Response output is buffered internally and flushed to the client
  * when {@link #finish()} is called. This allows the framework to set
- * the correct {@code Content-Length} header automatically.
+ * the correct {@code Content-Length} header automatically. Large
+ * responses can opt into {@linkplain #stream() streaming} instead.
  *
  * @see Server
  */
@@ -47,6 +49,7 @@ public class HttpContext implements Context {
     private final HttpExchange exchange;
     private int statusCode = 200;
     private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+    private OutputStream stream;
     private Map<String, List<String>> queryParams;
 
     /**
@@ -97,40 +100,133 @@ public class HttpContext implements Context {
         return exchange.getRequestBody();
     }
 
+    /**
+     * Sets the response status code.
+     *
+     * @param code the status code, from 200 to 599; informational (1xx)
+     *        codes can't be sent as a final response
+     * @throws IllegalArgumentException if code is outside 200-599
+     * @throws IllegalStateException if the response is already
+     *         {@linkplain #stream() streaming}
+     */
     @Override
     public void status(int code) {
+        if (code < 200 || code > 599) {
+            throw new IllegalArgumentException(
+                    "Status code must be between 200 and 599: " + code);
+        }
+        checkNotCommitted();
         this.statusCode = code;
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @throws IllegalStateException if the response is already
+     *         {@linkplain #stream() streaming}
+     */
     @Override
     public void header(String name, String value) {
+        checkNotCommitted();
         exchange.getResponseHeaders().set(name, value);
     }
 
     @Override
     public void print(String text) {
         byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
-        buffer.write(bytes, 0, bytes.length);
-    }
-
-    @Override
-    public OutputStream output() {
-        return buffer;
+        if (stream != null) {
+            try {
+                stream.write(bytes);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        } else {
+            buffer.write(bytes, 0, bytes.length);
+        }
     }
 
     /**
-     * Flushes the buffered response to the client and closes the
-     * exchange. Must be called exactly once after the route action
-     * has completed. No body is sent for HEAD requests or for status
-     * codes that forbid one (1xx, 204, 304).
+     * Returns the response body stream: the in-memory buffer, or the
+     * client connection once the response is {@linkplain #stream()
+     * streaming}.
+     */
+    @Override
+    public OutputStream output() {
+        return stream != null ? stream : buffer;
+    }
+
+    /**
+     * Switches the response to streaming: sends the status and headers
+     * now and returns a stream that writes the body straight to the
+     * client, using chunked transfer encoding. Use it for large or
+     * incremental responses that shouldn't be held in memory. Anything
+     * already written to the buffer is sent first; later
+     * {@link #print(String)} and {@link #output()} write to the stream.
+     *
+     * <p>After this call the status and headers can no longer change
+     * ({@link #status(int)} and {@link #header(String, String)} throw
+     * {@link IllegalStateException}), and an error in the handler can't
+     * be turned into a 500 response: the server logs it and closes the
+     * connection. Calling this again returns the same stream. For HEAD
+     * requests and statuses without a body, the returned stream
+     * discards what is written.
+     *
+     * @return the response body stream
+     * @throws IOException if the headers can't be sent
+     */
+    public OutputStream stream() throws IOException {
+        if (stream == null) {
+            if (mayHaveBody()) {
+                exchange.sendResponseHeaders(statusCode, 0);
+                stream = exchange.getResponseBody();
+                buffer.writeTo(stream);
+            } else {
+                exchange.sendResponseHeaders(statusCode, -1);
+                stream = OutputStream.nullOutputStream();
+            }
+            buffer.reset();
+        }
+        return stream;
+    }
+
+    /**
+     * Returns whether the response is {@linkplain #stream() streaming},
+     * meaning the status and headers have been sent.
+     *
+     * @return {@code true} once {@link #stream()} has been called
+     */
+    public boolean isStreaming() {
+        return stream != null;
+    }
+
+    /**
+     * Flushes the buffered response to the client (or ends a
+     * {@linkplain #stream() streaming} one) and closes the exchange.
+     * Must be called exactly once after the route action has completed.
+     * No body is sent for HEAD requests or for status codes that forbid
+     * one (204, 304); a HEAD response still carries the
+     * {@code Content-Length} its GET would have.
      *
      * @throws IOException if an I/O error occurs while sending
      */
     public void finish() throws IOException {
+        if (stream != null) {
+            try {
+                stream.close();
+            } finally {
+                exchange.close();
+            }
+            return;
+        }
         byte[] body = buffer.toByteArray();
         // No body for HEAD (including HEAD served by a GET route) or for
         // status codes that forbid one
         boolean sendBody = body.length > 0 && mayHaveBody();
+        if (!sendBody && body.length > 0 && isHead() && allowsBody()) {
+            // The JDK server takes a HEAD length only from the headers
+            exchange.getResponseHeaders().set("Content-Length",
+                    Integer.toString(body.length));
+        }
         exchange.sendResponseHeaders(statusCode,
                 sendBody ? body.length : -1);
         if (sendBody) {
@@ -144,17 +240,35 @@ public class HttpContext implements Context {
     /**
      * Discards the output and response headers written so far. Nothing
      * has been sent yet, since the response is buffered until
-     * {@link #finish()}.
+     * {@link #finish()}. Does nothing once the response is
+     * {@linkplain #stream() streaming}, since it has been sent.
      */
     @Override
     public void reset() {
+        if (stream != null) {
+            return;
+        }
         buffer.reset();
         exchange.getResponseHeaders().clear();
     }
 
+    private void checkNotCommitted() {
+        if (stream != null) {
+            throw new IllegalStateException(
+                    "Response is streaming; status and headers were sent");
+        }
+    }
+
+    private boolean isHead() {
+        return "HEAD".equals(method());
+    }
+
+    private boolean allowsBody() {
+        return statusCode != 204 && statusCode != 304;
+    }
+
     private boolean mayHaveBody() {
-        return !"HEAD".equals(method())
-                && statusCode >= 200 && statusCode != 204 && statusCode != 304;
+        return !isHead() && allowsBody();
     }
 
     private static Map<String, List<String>> parseQuery(String query) {
