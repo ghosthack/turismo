@@ -85,7 +85,8 @@ public abstract class Action implements Runnable {
     /**
      * Forwards the request to the given target path via {@link jakarta.servlet.RequestDispatcher}.
      *
-     * @param target the target path
+     * @param target the context-relative target path, starting with {@code /}
+     * @see Alias#forward(String)
      */
     protected void alias(String target) {
         forward(target);
@@ -93,8 +94,10 @@ public abstract class Action implements Runnable {
 
     /**
      * Forwards the request to the given target path via {@link jakarta.servlet.RequestDispatcher}.
+     * Don't build the target from request input; see {@link Alias#forward(String)}.
      *
-     * @param target the target path
+     * @param target the context-relative target path, starting with {@code /}
+     * @throws ActionException if the target is invalid or forwarding fails
      */
     protected void forward(String target) {
         ALIAS.forward(target);
@@ -102,8 +105,16 @@ public abstract class Action implements Runnable {
 
     /**
      * Forwards the request to a JSP page.
+     * <p>
+     * The forward goes through the container's servlet mappings, so the
+     * JSP path must reach the container's JSP servlet rather than this
+     * servlet: map turismo to {@code /} (the default servlet) or to a
+     * prefix such as {@code /app/*}, not to {@code /*}, which also
+     * matches the JSP path and forwards it back into turismo.
      *
-     * @param path the JSP path
+     * @param path the context-relative JSP path, such as
+     *        {@code /WEB-INF/views/page.jsp}
+     * @throws ActionException if the path is invalid or forwarding fails
      */
     protected void jsp(String path) {
         forward(path);

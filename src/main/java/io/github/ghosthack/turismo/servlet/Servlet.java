@@ -29,7 +29,6 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import io.github.ghosthack.turismo.Resolver;
 import io.github.ghosthack.turismo.Routes;
-import io.github.ghosthack.turismo.action.ActionException;
 import io.github.ghosthack.turismo.util.ClassForName.ClassForNameException;
 
 
@@ -42,7 +41,7 @@ import io.github.ghosthack.turismo.util.ClassForName.ClassForNameException;
  * <pre>
  * 	&lt;servlet&gt;
  * 		&lt;servlet-name&gt;app-action-servlet&lt;/servlet-name&gt;
- * 		&lt;servlet-class&gt;action.Servlet&lt;/servlet-class&gt;
+ * 		&lt;servlet-class&gt;io.github.ghosthack.turismo.servlet.Servlet&lt;/servlet-class&gt;
  * 		&lt;init-param&gt;
  * 			&lt;param-name&gt;routes&lt;/param-name&gt;
  * 			&lt;param-value&gt;example.Routes&lt;/param-value&gt;
@@ -62,27 +61,54 @@ public class Servlet extends HttpServlet {
 
     private static final String ROUTES = "routes";
     private static final long serialVersionUID = 1L;
+    private static final String DEFAULT_CHARSET = "UTF-8";
+    private static final System.Logger LOG =
+            System.getLogger(Servlet.class.getName());
 
     /** The configured routes instance. */
     protected transient Routes routes;
     /** The servlet context obtained during initialization. */
     protected transient ServletContext context;
 
+    /**
+     * Resolves and runs the action for the request. A request without a
+     * declared charset has its parameters decoded as UTF-8, like the
+     * embedded server. No matching action gets {@code 404}; an exception
+     * thrown by the action is logged and answered with {@code 500} (or
+     * rethrown as a {@link ServletException} if the response is already
+     * committed), so container error pages never show its stack trace.
+     * A request forwarded back into this servlet (see
+     * {@link io.github.ghosthack.turismo.action.Action#forward}) runs with
+     * its own {@link Env}, and the forwarding action's Env is restored
+     * afterwards.
+     */
     @Override
     public void service(HttpServletRequest req, HttpServletResponse res)
             throws ServletException, IOException {
+        if (req.getCharacterEncoding() == null) {
+            req.setCharacterEncoding(DEFAULT_CHARSET);
+        }
+        final Env previous = Env.get();
         Env.create(req, res, context);
         try {
-            final Runnable action = routes.getResolver().resolve();
-            if (action == null) {
-                res.sendError(HttpServletResponse.SC_NOT_FOUND);
-                return;
+            final Runnable action;
+            try {
+                action = routes.getResolver().resolve();
+                if (action == null) {
+                    res.sendError(HttpServletResponse.SC_NOT_FOUND);
+                    return;
+                }
+                action.run();
+            } catch (RuntimeException e) {
+                LOG.log(System.Logger.Level.ERROR, "Unhandled error in "
+                        + req.getMethod() + " " + req.getRequestURI(), e);
+                if (res.isCommitted()) {
+                    throw new ServletException(e);
+                }
+                res.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             }
-            action.run();
-        } catch (ActionException e) {
-            throw new ServletException(e);
         } finally {
-            Env.destroy();
+            Env.restore(previous);
         }
     }
 
@@ -97,7 +123,7 @@ public class Servlet extends HttpServlet {
                     + "Specify the fully qualified class name of your Routes implementation.");
         }
         try {
-            routes = createInstance(routesParam, Routes.class);
+            routes = createInstance(routesParam.trim(), Routes.class);
         } catch (ClassForNameException e) {
             throw new ServletException(e);
         }

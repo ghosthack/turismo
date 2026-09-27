@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.Set;
 import java.util.TreeSet;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import io.github.ghosthack.turismo.Resolver;
@@ -39,12 +40,43 @@ public abstract class MethodPathResolver implements Resolver {
     protected MethodPathResolver() {
     }
 
+    /**
+     * Resolves the current request. A request whose raw URI contains an
+     * encoded slash ({@code %2F}) is resolved with
+     * {@link #resolveEncoded(String, String[])} instead of
+     * {@link #resolve(String, String)}, so {@code /admin%2Fsecret} does
+     * not reach an {@code /admin/secret} route through the
+     * container-decoded path.
+     */
     @Override
     public Runnable resolve() throws ActionException {
+        HttpServletRequest req = Env.req();
+        String pathInfo = req.getPathInfo();
         String path = extractPath();
-        String method = Env.req().getMethod();
+        String method = req.getMethod();
+        String[] segments = EncodedPath.segments(req, pathInfo != null);
+        if (segments != null) {
+            return resolveEncoded(method, segments);
+        }
         Runnable route = resolve(method, path);
         return route;
+    }
+
+    /**
+     * Resolves a request whose raw path contains an encoded slash. The
+     * segments are those of the raw path, each percent-decoded on its
+     * own, so an encoded {@code /} stays inside its segment; there is no
+     * decoded path to look up exact routes with. The default dispatches
+     * to {@link #find(String, String, String[])} and answers anything
+     * else with {@code 404 Not Found}; the built-in resolvers use their
+     * default route instead.
+     *
+     * @param method   the HTTP method
+     * @param segments the decoded segments of the raw path
+     * @return the action to run
+     */
+    protected Runnable resolveEncoded(String method, String[] segments) {
+        return dispatch(method, null, segments, MethodPathResolver::notFound);
     }
 
     /**
@@ -81,6 +113,35 @@ public abstract class MethodPathResolver implements Resolver {
     }
 
     /**
+     * Finds the action for this method, given the path both as a whole
+     * (for exact routes) and as decoded segments (for pattern routes).
+     * {@code path} is {@code null} when it must not be used for exact
+     * lookups, because the raw path had an encoded slash. The default
+     * calls {@link #find(String, String)} when there is a path.
+     *
+     * @param method   the HTTP method
+     * @param path     the decoded request path, or {@code null}
+     * @param segments the decoded path segments
+     * @return the matching action, or {@code null}
+     */
+    protected Runnable find(String method, String path, String[] segments) {
+        return path != null ? find(method, path) : null;
+    }
+
+    /**
+     * Returns the methods that have a route matching the path, given as in
+     * {@link #find(String, String, String[])}. The default calls
+     * {@link #allowedMethods(String)} when there is a path.
+     *
+     * @param path     the decoded request path, or {@code null}
+     * @param segments the decoded path segments
+     * @return the matching methods; empty if none
+     */
+    protected Set<String> allowedMethods(String path, String[] segments) {
+        return path != null ? allowedMethods(path) : Collections.emptySet();
+    }
+
+    /**
      * Resolves a request using {@link #find}: a HEAD request with no
      * HEAD route is served by the GET route, a path that only matches
      * routes for other methods gets {@code 405 Method Not Allowed}, and
@@ -93,14 +154,30 @@ public abstract class MethodPathResolver implements Resolver {
      */
     protected final Runnable dispatch(String method, String path,
             Runnable fallback) {
-        Runnable route = find(method, path);
+        return dispatch(method, path,
+                path != null ? path.split("/") : null, fallback);
+    }
+
+    /**
+     * Resolves a request like {@link #dispatch(String, String, Runnable)},
+     * with the path given as in {@link #find(String, String, String[])}.
+     *
+     * @param method   the HTTP method
+     * @param path     the decoded request path, or {@code null}
+     * @param segments the decoded path segments
+     * @param fallback the action to use when nothing matches
+     * @return the action to run, or {@code fallback} (possibly null)
+     */
+    protected final Runnable dispatch(String method, String path,
+            String[] segments, Runnable fallback) {
+        Runnable route = find(method, path, segments);
         if (route == null && "HEAD".equals(method)) {
-            route = find("GET", path);
+            route = find("GET", path, segments);
         }
         if (route != null) {
             return route;
         }
-        Set<String> allowed = new TreeSet<>(allowedMethods(path));
+        Set<String> allowed = new TreeSet<>(allowedMethods(path, segments));
         if (!allowed.isEmpty()) {
             if (allowed.contains("GET")) {
                 allowed.add("HEAD");
@@ -115,6 +192,14 @@ public abstract class MethodPathResolver implements Resolver {
         res.setHeader("Allow", String.join(", ", allowed));
         try {
             res.sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
+        } catch (IOException e) {
+            throw new ActionException(e);
+        }
+    }
+
+    private static void notFound() {
+        try {
+            Env.res().sendError(HttpServletResponse.SC_NOT_FOUND);
         } catch (IOException e) {
             throw new ActionException(e);
         }
