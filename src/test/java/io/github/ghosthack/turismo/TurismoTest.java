@@ -1102,7 +1102,7 @@ public class TurismoTest {
             fail("Expected IllegalArgumentException");
         } catch (IllegalArgumentException e) {
             assertTrue(e.getMessage().contains("withParam"));
-            assertTrue(e.getMessage().contains("java.util.List"));
+            assertTrue(e.getMessage().contains("java.util.Map"));
         }
     }
 
@@ -1226,7 +1226,7 @@ public class TurismoTest {
 
     static class UnsupportedParamController {
         @GET("/p")
-        void withParam(List<String> s) {
+        void withParam(Map<String, String> s) {
         }
     }
 

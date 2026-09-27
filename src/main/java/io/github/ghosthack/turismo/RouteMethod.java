@@ -21,9 +21,16 @@ import java.lang.reflect.Array;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.lang.reflect.WildcardType;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -41,14 +48,15 @@ import io.github.ghosthack.turismo.annotation.Param;
  * read with {@link Turismo#param(String)} (path, query, then form
  * parameters) and converted to the argument type: {@code String}, a
  * primitive or its wrapper, {@link BigInteger}, {@link BigDecimal}, an
- * enum (by constant name) or {@link UUID}. An array of any of these
- * collects every value of a repeated parameter
+ * enum (by constant name) or {@link UUID}. An array of any of these, or
+ * a {@code List}, {@code Collection}, {@code Iterable} or {@code Set} of
+ * one, collects every value of a repeated parameter
  * ({@link Turismo#paramValues(String)}).
  *
  * <p>A value that can't be converted, or a missing value for a
  * primitive argument, is answered with {@code 400 Bad Request}; a missing
  * value for any other type is passed as {@code null}, and a missing array
- * parameter as an empty array. Big numbers are limited to
+ * or collection parameter as an empty one. Big numbers are limited to
  * {@value #MAX_BIG_NUMBER} characters (and a {@code BigDecimal} to that
  * scale magnitude).
  *
@@ -111,6 +119,9 @@ final class RouteMethod implements Runnable {
         if (type.isArray()) {
             return arrayBinder(type.getComponentType(), name);
         }
+        if (COLLECTION_TYPES.contains(type)) {
+            return collectionBinder(p, name);
+        }
         Function<String, Object> converter = converter(type);
         if (converter == null) {
             throw unsupported(type, name);
@@ -156,7 +167,70 @@ final class RouteMethod implements Runnable {
         };
     }
 
-    private IllegalArgumentException unsupported(Class<?> type, String name) {
+    /**
+     * Collection types an argument can be declared as. {@code Set} gives a
+     * {@code LinkedHashSet} (request order, duplicates dropped); the others
+     * an {@code ArrayList}.
+     */
+    private static final Set<Class<?>> COLLECTION_TYPES =
+            Set.of(List.class, Collection.class, Iterable.class, Set.class);
+
+    /**
+     * Binds every value of a repeated parameter to a collection whose
+     * element type comes from the declared type argument
+     * ({@code List<Integer>}, {@code Set<? extends Size>}); a missing
+     * parameter gives an empty collection. The collection is a fresh,
+     * mutable one per request.
+     */
+    private Supplier<Object> collectionBinder(Parameter p, String name) {
+        Type declared = p.getParameterizedType();
+        Class<?> element = elementClass(declared);
+        if (element == null) {
+            throw new IllegalArgumentException("Parameter '" + name + "' of "
+                    + describe() + " needs a concrete type argument, such as "
+                    + p.getType().getSimpleName() + "<String>; was "
+                    + declared.getTypeName());
+        }
+        Function<String, Object> converter = converter(element);
+        if (converter == null) {
+            throw unsupported(declared, name);
+        }
+        boolean set = p.getType() == Set.class;
+        return () -> {
+            List<String> values = Turismo.paramValues(name);
+            Collection<Object> result = set
+                    ? new LinkedHashSet<>() : new ArrayList<>(values.size());
+            for (String value : values) {
+                try {
+                    result.add(converter.apply(value));
+                } catch (IllegalArgumentException e) {
+                    throw invalid(name);
+                }
+            }
+            return result;
+        };
+    }
+
+    /**
+     * The element class of {@code List<X>} or {@code List<? extends X>};
+     * null for a raw type, an unbounded or lower-bounded wildcard, or a
+     * type variable.
+     */
+    private static Class<?> elementClass(Type declared) {
+        if (!(declared instanceof ParameterizedType pt)) {
+            return null;
+        }
+        Type arg = pt.getActualTypeArguments()[0];
+        if (arg instanceof WildcardType w) {
+            if (w.getLowerBounds().length > 0) {
+                return null;
+            }
+            arg = w.getUpperBounds()[0];
+        }
+        return arg instanceof Class<?> c && c != Object.class ? c : null;
+    }
+
+    private IllegalArgumentException unsupported(Type type, String name) {
         return new IllegalArgumentException("Unsupported type "
                 + type.getTypeName() + " for parameter '" + name + "' of "
                 + describe());
