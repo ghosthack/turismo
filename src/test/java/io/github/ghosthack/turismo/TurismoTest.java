@@ -726,8 +726,9 @@ public class TurismoTest {
             } catch (java.io.IOException e) {
                 throw new java.io.UncheckedIOException(e);
             }
-            IllegalStateException e = assertThrows(
-                    IllegalStateException.class, () -> Turismo.form("a"));
+            RequestException e = assertThrows(
+                    RequestException.class, () -> Turismo.form("a"));
+            assertEquals(400, e.status());
             seen[1] = e.getMessage();
         });
         MockContext ctx = new MockContext("POST", "/raw").form("a=1");
@@ -743,7 +744,7 @@ public class TurismoTest {
             } catch (java.io.IOException e) {
                 throw new java.io.UncheckedIOException(e);
             }
-            assertThrows(IllegalStateException.class,
+            assertThrows(RequestException.class,
                     () -> Turismo.param("missing"));
         });
         MockContext ctx2 = new MockContext("POST", "/body").form("a=1");
@@ -885,7 +886,7 @@ public class TurismoTest {
         MockContext ctx = new MockContext("POST", "/users/42");
         Turismo.handle(ctx);
         assertEquals(405, ctx.statusCode);
-        assertEquals("GET, HEAD, PUT", ctx.responseHeaders.get("Allow"));
+        assertEquals("GET, HEAD, OPTIONS, PUT", ctx.responseHeaders.get("Allow"));
         assertEquals("Method Not Allowed", ctx.printed.toString());
     }
 
@@ -895,7 +896,7 @@ public class TurismoTest {
         MockContext ctx = new MockContext("GET", "/items");
         Turismo.handle(ctx);
         assertEquals(405, ctx.statusCode);
-        assertEquals("POST", ctx.responseHeaders.get("Allow"));
+        assertEquals("OPTIONS, POST", ctx.responseHeaders.get("Allow"));
     }
 
     @Test

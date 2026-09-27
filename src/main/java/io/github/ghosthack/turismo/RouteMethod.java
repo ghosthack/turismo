@@ -20,6 +20,7 @@ import java.io.InputStream;
 import java.lang.reflect.Array;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
@@ -34,6 +35,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 
 import io.github.ghosthack.turismo.annotation.Param;
 
@@ -42,7 +44,10 @@ import io.github.ghosthack.turismo.annotation.Param;
  * action, binding each method argument from the current request.
  *
  * <p>An argument of type {@link Context} gets the request context and
- * one of type {@link InputStream} gets the request body. Any other
+ * one of type {@link InputStream} gets the request body. The body is
+ * bound after every other argument, whatever the declared order, so that
+ * parameters can still be read from a form body before the stream is
+ * handed over (the stream then replays the body). Any other
  * argument is a request parameter, named by {@link Param @Param} or by
  * the Java parameter name, and is
  * read with {@link Turismo#param(String)} (path, query, then form
@@ -70,6 +75,8 @@ final class RouteMethod implements Runnable {
     private final Object instance;
     private final Method method;
     private final Supplier<Object>[] binders;
+    /** Indexes of the binders to run: request body streams last. */
+    private final int[] bindOrder;
     private String[] debugNames;
     private boolean debugNamesRead;
 
@@ -79,16 +86,27 @@ final class RouteMethod implements Runnable {
         this.method = method;
         Parameter[] parameters = method.getParameters();
         this.binders = new Supplier[parameters.length];
+        this.bindOrder = new int[parameters.length];
+        int next = 0;
         for (int i = 0; i < parameters.length; i++) {
             binders[i] = binder(parameters[i], i);
+            if (parameters[i].getType() != InputStream.class) {
+                bindOrder[next++] = i;
+            }
+        }
+        for (int i = 0; i < parameters.length; i++) {
+            if (parameters[i].getType() == InputStream.class) {
+                bindOrder[next++] = i;
+            }
         }
         method.setAccessible(true);
     }
 
     @Override
     public void run() {
+        // Arguments stay in declared order; only the binding order changes
         Object[] args = new Object[binders.length];
-        for (int i = 0; i < binders.length; i++) {
+        for (int i : bindOrder) {
             args[i] = binders[i].get();
         }
         try {
@@ -255,17 +273,58 @@ final class RouteMethod implements Runnable {
         if (p.isNamePresent()) {
             return p.getName();
         }
+        Method named = namedMethod();
         if (!debugNamesRead) {
-            debugNames = ParameterNames.of(method);
+            debugNames = named != null ? ParameterNames.of(named) : null;
             debugNamesRead = true;
         }
         if (debugNames == null) {
+            if (Modifier.isAbstract(method.getModifiers())) {
+                throw new IllegalArgumentException("Cannot bind parameter "
+                        + p.getName() + " of abstract method " + describe()
+                        + ": an abstract method's class file has no"
+                        + " parameter names, and "
+                        + (named == null
+                            ? "no implementation was found in "
+                                + instance.getClass().getName()
+                            : "its implementation "
+                                + named.getDeclaringClass().getName()
+                                + "." + named.getName()
+                                + " has no debug information (-g)")
+                        + "; annotate it with @Param, or compile with"
+                        + " -parameters");
+            }
             throw new IllegalArgumentException("Cannot bind parameter "
                     + p.getName() + " of " + describe()
                     + ": annotate it with @Param, or compile with -parameters"
                     + " or with debug information (-g)");
         }
         return debugNames[index];
+    }
+
+    /**
+     * The method whose class file holds the parameter names: the route
+     * method itself or, when it is abstract (it has no code, and so no
+     * local variable names), the most-derived concrete implementation in
+     * the instance's class; null if there is none.
+     */
+    private Method namedMethod() {
+        if (!Modifier.isAbstract(method.getModifiers())) {
+            return method;
+        }
+        for (Class<?> c = instance.getClass(); c != null;
+                c = c.getSuperclass()) {
+            try {
+                Method m = c.getDeclaredMethod(method.getName(),
+                        method.getParameterTypes());
+                if (!Modifier.isAbstract(m.getModifiers())) {
+                    return m;
+                }
+            } catch (NoSuchMethodException e) {
+                // not declared here: look further up
+            }
+        }
+        return null;
     }
 
     private String describe() {
@@ -277,8 +336,12 @@ final class RouteMethod implements Runnable {
         if (type == String.class) return s -> s;
         if (type == int.class || type == Integer.class) return Integer::valueOf;
         if (type == long.class || type == Long.class) return Long::valueOf;
-        if (type == double.class || type == Double.class) return Double::valueOf;
-        if (type == float.class || type == Float.class) return Float::valueOf;
+        if (type == double.class || type == Double.class) {
+            return RouteMethod::parseDouble;
+        }
+        if (type == float.class || type == Float.class) {
+            return RouteMethod::parseFloat;
+        }
         if (type == short.class || type == Short.class) return Short::valueOf;
         if (type == byte.class || type == Byte.class) return Byte::valueOf;
         if (type == boolean.class || type == Boolean.class) {
@@ -326,6 +389,38 @@ final class RouteMethod implements Runnable {
             throw new IllegalArgumentException("exponent out of range");
         }
         return value;
+    }
+
+    /**
+     * A plain decimal number with an optional exponent, such as
+     * {@code -1.5}, {@code .5} or {@code 2e10}; unlike what
+     * {@link Double#valueOf} accepts, no {@code NaN}, {@code Infinity},
+     * hexadecimal ({@code 0x1p3}), type suffix ({@code 1d}) or
+     * surrounding whitespace.
+     */
+    private static final Pattern DECIMAL = Pattern.compile(
+            "[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?");
+
+    private static Double parseDouble(String s) {
+        if (!DECIMAL.matcher(s).matches()) {
+            throw new IllegalArgumentException("not a decimal number");
+        }
+        double d = Double.parseDouble(s);
+        if (Double.isInfinite(d)) {
+            throw new IllegalArgumentException("out of range");
+        }
+        return d;
+    }
+
+    private static Float parseFloat(String s) {
+        if (!DECIMAL.matcher(s).matches()) {
+            throw new IllegalArgumentException("not a decimal number");
+        }
+        float f = Float.parseFloat(s);
+        if (Float.isInfinite(f)) {
+            throw new IllegalArgumentException("out of range");
+        }
+        return f;
     }
 
     /** Strict boolean parsing: unlike Boolean.valueOf, rejects "yes". */

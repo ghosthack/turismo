@@ -73,11 +73,22 @@ same reason `/admin%2Fsecret` does not match an exact `/admin/secret` route.
 
 Paths must start with `/`.
 
+Every path segment counts, empty ones included: a trailing slash or a
+doubled slash is part of the path, for exact and pattern routes alike.
+`/users/:id` matches `/users/42` but not `/users/42/`, `/users/42//` or
+`/users/` (a named parameter never matches an empty segment), and an exact
+`/exact/` route doesn't match `/exact`. Register both forms if you want to
+serve both.
+
+Registering the same method and path again replaces the earlier route.
+
 ### Wildcards
 
 ```java
 get("/files/*/download", () -> print("Downloading"));
 ```
+
+Like a named parameter, `*` matches exactly one non-empty segment.
 
 ### Query parameters
 
@@ -115,7 +126,7 @@ by default); if a name repeats, `form()` returns the first value and
 `formValues()` all of them. `body()` still returns the full body afterwards.
 The reverse order doesn't work: once a handler has taken the raw `body()`
 stream of a form request, `form()` and a `param()` that falls through to the
-form throw `IllegalStateException`. Bodies over 2 MB get `413 Content Too
+form fail, and the request is answered with `400 Bad Request`. Bodies over 2 MB get `413 Content Too
 Large` (change the limit with `app().setMaxFormSize(bytes)`), and malformed
 ones `400 Bad Request`. Other content types are left alone: `form()` returns
 `null` and the body isn't read. For `multipart/form-data` (servlet
@@ -127,7 +138,10 @@ All standard methods: `get`, `post`, `put`, `delete`, `patch`, `head`, `options`
 
 HEAD requests without a `head` route are served by the matching GET route,
 with the body discarded. A request whose path matches a route registered only
-for other methods gets `405 Method Not Allowed` with an `Allow` header.
+for other methods gets `405 Method Not Allowed` with an `Allow` header. OPTIONS
+requests without an `options` route are answered with `204 No Content` and
+the same `Allow` header (`OPTIONS`, and `HEAD` when there is a GET route, are
+always listed).
 
 Every route responds `200 OK` unless the handler sets a status, POST
 included:
@@ -237,7 +251,10 @@ start(8080);
 ```
 
 Annotated methods inherited from a superclass are registered too, and an
-annotated override in a subclass replaces the superclass's route.
+annotated override in a subclass replaces the superclass's route (an
+overload with other parameter types doesn't). If any method of the
+controller is rejected, `controller()` throws and registers none of its
+routes.
 
 ### Method arguments
 
@@ -280,7 +297,10 @@ void subscribe(Set<String> topic, List<Integer> day) {
 - Supported types: `String`, primitives and their wrappers (`boolean` and
   `Boolean` accept `true`/`false` in any case), `BigInteger`, `BigDecimal`,
   enums (by constant name) and `UUID`. A `Context` argument receives the
-  request context and an `InputStream` argument the request body.
+  request context and an `InputStream` argument the request body; the body
+  is bound after the other arguments, so they can still come from a form
+  body. `double` and `float` accept plain decimal numbers (`-1.5`, `2e10`),
+  not `NaN`, `Infinity`, hexadecimal or out-of-range values.
 - An array of any of those (`String[]`, `int[]`, `Boolean[]`,
   `BigDecimal[]`, ...), or a `List`, `Collection`, `Iterable` or `Set` of
   one (`List<Integer>`, `Set<Size>`), receives every value of a repeated
@@ -299,7 +319,8 @@ void subscribe(Set<String> topic, List<Integer> day) {
   the class file, which records it when the controller is compiled with
   debug information (`-g`, the default in Maven, Gradle and IDEs) or with
   `-parameters`. Only a class compiled with neither (plain `javac`, or
-  `-g:none`) needs `@Param`; `controller()` rejects its methods with a
+  `-g:none`) needs `@Param`. For an annotated abstract method the names
+  come from its implementation in the controller's class; `controller()` rejects its methods with a
   message saying so, as it does an argument of an unsupported type.
 
 Controller routes use the same routing engine as lambda routes and can be
