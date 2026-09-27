@@ -705,12 +705,40 @@ browsers encode them.
     for oversized bodies, and `ParseException` for a missing boundary or
     unsupported charset.
   - Requests without `Content-Length` are accepted.
+  - More than 1000 parts is answered with `413`
+    (`MultipartParser.setMaxParts`).
+  - A backslash in a quoted file name is kept as is; only `%22`, `%0D` and
+    `%0A` are decoded, as browsers send them.
+  - Query-string parameters are merged with the body's fields.
+- **Trailing slashes are significant**: `/users/:id` no longer matches
+  `/users/42/` or `/users/42//`, the same as exact routes. A `:param` or
+  `*` never matches an empty segment. This applies to `RoutesList` too.
+- **OPTIONS**: a path with routes for other methods answers `OPTIONS` with
+  `204` and an `Allow` header, and `405` responses list `OPTIONS` in
+  `Allow`.
+- **Re-registering a route** replaces it for pattern routes too (exact
+  routes already did); the last registration wins.
+- **`controller()` is all-or-nothing**: if a method can't be registered, no
+  route of that controller is.
+- **Number arguments**: `float`/`double` arguments reject `NaN`,
+  `Infinity`, hex floats and values that overflow, with `400`.
+- **Status codes**: on the embedded server `status()` rejects codes outside
+  200-599.
+- **Redirects**: `redirect()` rejects every control character (TAB too),
+  not only CR/LF.
+- **Servlet backend**: requests without a charset are decoded as UTF-8, and
+  an exception from an action is logged and answered with `500` instead of
+  reaching the container.
+- **Form after body**: reading form fields after taking the raw body
+  answers `400` instead of throwing `IllegalStateException`.
 
 New in 5.0: `App` instances ([Multiple apps](#multiple-apps)), controller
 method arguments ([Method arguments](#method-arguments)), form bodies
 ([Form bodies](#form-bodies)), graceful
 `stop(Duration)`, logging of handler errors, and JSON support for records,
-enums, `Character` and all array types.
+enums, `Character` and all array types, `stream()` responses,
+`redirectLocal()`, multiple files per multipart field (`getFiles`) and
+automatic `OPTIONS`.
 
 ## Releasing
 

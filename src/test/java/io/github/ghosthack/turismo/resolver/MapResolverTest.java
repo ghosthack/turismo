@@ -70,7 +70,7 @@ public class MapResolverTest {
         Runnable resolved = resolver.resolve();
         resolved.run();
         org.junit.jupiter.api.Assertions.assertFalse(called[0]);
-        verify(res).setHeader("Allow", "GET, HEAD");
+        verify(res).setHeader("Allow", "GET, HEAD, OPTIONS");
         verify(res).sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
     }
 

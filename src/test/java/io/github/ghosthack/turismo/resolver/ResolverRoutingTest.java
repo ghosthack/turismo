@@ -105,8 +105,59 @@ public class ResolverRoutingTest {
         HttpServletResponse res = getResponseMock();
         Env.create(encoded("DELETE", "/files/a/b", "/files/a%2Fb"), res, null);
         resolver.resolve().run();
-        verify(res).setHeader("Allow", "GET, HEAD");
+        verify(res).setHeader("Allow", "GET, HEAD, OPTIONS");
         verify(res).sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
+    }
+
+    @Test
+    public void testOptionsAnsweredWithAllow() {
+        ListResolver resolver = new ListResolver();
+        resolver.route(NOT_FOUND);
+        resolver.route("GET", "/files/:name", () -> { });
+        resolver.route("DELETE", "/files/:name", () -> { });
+
+        HttpServletResponse res = getResponseMock();
+        Env.create(getRequestMock("OPTIONS", "/files/a"), res, null);
+        resolver.resolve().run();
+        verify(res).setHeader("Allow", "DELETE, GET, HEAD, OPTIONS");
+        verify(res).setStatus(HttpServletResponse.SC_NO_CONTENT);
+
+        // No route for the path: not an OPTIONS answer
+        Env.create(getRequestMock("OPTIONS", "/nothing"), getResponseMock(),
+                null);
+        assertSame(NOT_FOUND, resolver.resolve());
+    }
+
+    @Test
+    public void testListResolverTrailingSlashIsSignificant() {
+        ListResolver resolver = new ListResolver();
+        resolver.route(NOT_FOUND);
+        Runnable user = () -> { };
+        Runnable root = () -> { };
+        resolver.route("GET", "/users/:id", user);
+        resolver.route("GET", "/", root);
+        Env.create(getRequestMock("GET", "/"), getResponseMock(), null);
+
+        assertSame(user, resolver.resolve("GET", "/users/42"));
+        assertSame(NOT_FOUND, resolver.resolve("GET", "/users/42/"));
+        assertSame(NOT_FOUND, resolver.resolve("GET", "/users/"));
+        assertSame(root, resolver.resolve("GET", "/"));
+    }
+
+    @Test
+    public void testUnalignedEncodedPathMatchesNothing() {
+        ListResolver resolver = new ListResolver();
+        resolver.route(NOT_FOUND);
+        resolver.route("GET", "/", () -> { });
+
+        HttpServletRequest req = getRequestMock("GET", "/x");
+        when(req.getContextPath()).thenReturn("");
+        when(req.getServletPath()).thenReturn("/a/b/c");
+        when(req.getRequestURI()).thenReturn("/a%2Fb");
+        Env.create(req, getResponseMock(), null);
+
+        assertSame(EncodedPath.NO_MATCH, EncodedPath.segments(req, true));
+        assertSame(NOT_FOUND, resolver.resolve());
     }
 
     @Test

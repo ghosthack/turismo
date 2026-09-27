@@ -167,7 +167,7 @@ public class ListResolverTest {
         Env.create(req, res, null);
 
         resolver.resolve().run();
-        verify(res).setHeader("Allow", "GET, HEAD");
+        verify(res).setHeader("Allow", "GET, HEAD, OPTIONS");
         verify(res).sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
     }
 

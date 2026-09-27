@@ -184,7 +184,7 @@ public class ListResolver extends MethodPathResolver {
 
     @Override
     protected Runnable find(String method, String path) {
-        return find(method, path, path != null ? path.split("/") : null);
+        return find(method, path, path != null ? PathPattern.split(path) : null);
     }
 
     /**
@@ -215,7 +215,7 @@ public class ListResolver extends MethodPathResolver {
 
     @Override
     protected Set<String> allowedMethods(String path) {
-        return allowedMethods(path, path != null ? path.split("/") : null);
+        return allowedMethods(path, path != null ? PathPattern.split(path) : null);
     }
 
     @Override

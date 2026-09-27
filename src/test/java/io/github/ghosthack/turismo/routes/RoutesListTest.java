@@ -155,7 +155,7 @@ public class RoutesListTest {
         HttpServletResponse res = getResponseMock();
         Env.create(req, res, null);
         routes.getResolver().resolve().run();
-        verify(res).setHeader("Allow", "POST");
+        verify(res).setHeader("Allow", "OPTIONS, POST");
         verify(res).sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
     }
 
