@@ -45,10 +45,16 @@ import jakarta.servlet.http.HttpServletResponse;
  * </pre>
  * </blockquote>
  *
+ * <p>Both describe the first file of a field; all files, including several
+ * under one name, are available from
+ * {@link MultipartRequest#getFiles(String)}. File names are untrusted
+ * client input (see {@link FilePart}).</p>
+ *
  * <p>Text is decoded with the request's charset, or with the
  * {@code charset-name} init parameter (default UTF-8) when the request does
  * not declare one. A malformed body gets {@code 400 Bad Request} and one
- * larger than {@link MultipartParser#getMaxContentSize()} gets
+ * larger than {@link MultipartParser#getMaxContentSize()} (or with more than
+ * {@link MultipartParser#getMaxParts()} parts) gets
  * {@code 413 Content Too Large}.</p>
  *
  * <p>Configuration details:</p>
