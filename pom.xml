@@ -38,6 +38,7 @@
         <configuration>
           <encoding>${project.build.sourceEncoding}</encoding>
           <release>21</release>
+          <parameters>true</parameters>
         </configuration>
       </plugin>
       <plugin>

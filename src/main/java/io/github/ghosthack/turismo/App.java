@@ -18,7 +18,6 @@ package io.github.ghosthack.turismo;
 
 import java.io.ByteArrayOutputStream;
 import java.lang.annotation.Annotation;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
@@ -255,14 +254,26 @@ public class App {
      * {@link PUT @PUT}, {@link DELETE @DELETE}, or {@link PATCH @PATCH},
      * and registers each as a route. Annotated methods declared in
      * superclasses are included; an annotated override in a subclass
-     * replaces the superclass's route. Route methods must take no
-     * parameters.
+     * replaces the superclass's route.
+     *
+     * <p>Route method arguments are bound from the request: path and
+     * query parameters by name (see {@link io.github.ghosthack.turismo.annotation.Param
+     * @Param}), converted to {@code String}, primitives and their
+     * wrappers, enums or {@code UUID}; a {@link Context} argument gets the
+     * request context and an {@code InputStream} argument the request
+     * body. A parameter value that can't be converted, or is missing for
+     * a primitive argument, is answered with {@code 400 Bad Request}.
      *
      * <pre>{@code
      * public class MyController {
      *     @GET("/hello")
      *     void hello() {
      *         Turismo.print("Hello!");
+     *     }
+     *
+     *     @GET("/items/:id")
+     *     void item(@Param("id") int id) {
+     *         Turismo.print("item: " + id);
      *     }
      * }
      *
@@ -271,7 +282,8 @@ public class App {
      *
      * @param instance the controller instance
      * @throws IllegalArgumentException if the instance has no annotated
-     *         methods, or an annotated method takes parameters
+     *         methods, or an annotated method has an argument that can't
+     *         be bound
      */
     public void controller(Object instance) {
         int count = 0;
@@ -295,15 +307,8 @@ public class App {
                     if (httpMethod == null) {
                         continue;
                     }
-                    if (m.getParameterCount() != 0) {
-                        throw new IllegalArgumentException(
-                                "Route method must take no parameters: "
-                                + c.getName() + "." + m.getName());
-                    }
-                    m.setAccessible(true);
-                    Runnable action = toAction(instance, m);
-                    String path = routePath(a);
-                    route(httpMethod, path, action);
+                    route(httpMethod, routePath(a),
+                            new RouteMethod(instance, m));
                     annotated = true;
                     count++;
                 }
@@ -335,25 +340,6 @@ public class App {
         if (a instanceof DELETE d) return d.value();
         if (a instanceof PATCH p) return p.value();
         throw new IllegalArgumentException("Not a route annotation: " + a);
-    }
-
-    private static Runnable toAction(Object instance, Method method) {
-        return () -> {
-            try {
-                method.invoke(instance);
-            } catch (InvocationTargetException e) {
-                Throwable cause = e.getCause();
-                if (cause instanceof RuntimeException re) {
-                    throw re;
-                }
-                if (cause instanceof Error err) {
-                    throw err;
-                }
-                throw new RuntimeException(cause);
-            } catch (IllegalAccessException e) {
-                throw new RuntimeException(e);
-            }
-        };
     }
 
     // ---------------------------------------------------------------
