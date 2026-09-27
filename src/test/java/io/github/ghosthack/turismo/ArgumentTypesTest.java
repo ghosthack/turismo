@@ -4,8 +4,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -14,7 +18,10 @@ import io.github.ghosthack.turismo.TurismoTest.MockContext;
 import io.github.ghosthack.turismo.annotation.GET;
 import io.github.ghosthack.turismo.annotation.POST;
 
-/** Controller arguments: big numbers, booleans, arrays, repeated values. */
+/**
+ * Controller arguments: big numbers, booleans, arrays, collections and
+ * repeated values.
+ */
 public class ArgumentTypesTest {
 
     enum Size { S, M, L }
@@ -48,6 +55,60 @@ public class ArgumentTypesTest {
         void checkboxes(String[] topic, BigInteger[] n) {
             Turismo.print(Arrays.toString(topic) + " " + Arrays.toString(n));
         }
+
+        @GET("/collections")
+        void collections(List<String> tag, Collection<Integer> n,
+                Iterable<BigDecimal> d, Set<Size> size,
+                List<? extends Long> w, List<Boolean> missing) {
+            Turismo.print(tag + " " + n + " " + d + " " + size + " " + w
+                    + " " + missing + " " + tag.getClass().getSimpleName()
+                    + " " + size.getClass().getSimpleName());
+        }
+
+        @GET("/mutable")
+        void mutable(List<String> tag) {
+            tag.add("added");
+            Collections.sort(tag);
+            Turismo.print(tag.toString());
+        }
+
+        @POST("/topics")
+        void topics(Set<String> topic) {
+            Turismo.print(topic.toString());
+        }
+    }
+
+    static class RawListCtl {
+        @SuppressWarnings("rawtypes")
+        @GET("/x") void x(List tags) { }
+    }
+
+    static class UnboundedCtl {
+        @GET("/x") void x(List<?> tags) { }
+    }
+
+    static class ObjectListCtl {
+        @GET("/x") void x(List<Object> tags) { }
+    }
+
+    static class SuperBoundCtl {
+        @GET("/x") void x(List<? super Integer> tags) { }
+    }
+
+    static class TypeVariableCtl {
+        @GET("/x") <T> void x(List<T> tags) { }
+    }
+
+    static class NestedListCtl {
+        @GET("/x") void x(List<List<String>> tags) { }
+    }
+
+    static class ArrayElementCtl {
+        @GET("/x") void x(List<int[]> tags) { }
+    }
+
+    static class ConcreteListCtl {
+        @GET("/x") void x(ArrayList<String> tags) { }
     }
 
     static class NestedArrayCtl {
@@ -163,6 +224,76 @@ public class ArgumentTypesTest {
         e = assertThrows(IllegalArgumentException.class,
                 () -> Turismo.controller(new ObjectArrayCtl()));
         assertTrue(e.getMessage().contains("java.lang.Object[]"), e.getMessage());
+    }
+
+    // ---------------------------------------------------------------
+    // Collections
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testCollectionsCollectRepeatedValues() {
+        MockContext ctx = get("/collections",
+                "tag", "b", "tag", "a",
+                "n", "3", "n", "-1",
+                "d", "0.5",
+                "size", "L", "size", "S", "size", "L",
+                "w", "9000000000");
+        assertEquals(200, ctx.statusCode);
+        // Set keeps request order and drops the repeated L
+        assertEquals("[b, a] [3, -1] [0.5] [L, S] [9000000000] []"
+                + " ArrayList LinkedHashSet", ctx.printed.toString());
+    }
+
+    @Test
+    public void testMissingCollectionsAreEmpty() {
+        assertEquals("[] [] [] [] [] [] ArrayList LinkedHashSet",
+                get("/collections").printed.toString());
+    }
+
+    @Test
+    public void testCollectionsAreMutable() {
+        assertEquals("[a, added, c]",
+                get("/mutable", "tag", "c", "tag", "a").printed.toString());
+    }
+
+    @Test
+    public void testCollectionWithBadElementIs400() {
+        MockContext ctx = get("/collections", "n", "1", "n", "x");
+        assertEquals(400, ctx.statusCode);
+        assertTrue(ctx.printed.toString().contains("'n'"));
+        assertEquals(400, get("/collections", "size", "XL").statusCode);
+    }
+
+    @Test
+    public void testFormCheckboxesBindToSet() {
+        MockContext ctx = new MockContext("POST", "/topics")
+                .form("topic=java&topic=http&topic=java");
+        assertEquals("[java, http]", handle(ctx).printed.toString());
+    }
+
+    @Test
+    public void testCollectionsWithoutConcreteElementTypeRejected() {
+        for (Object ctl : new Object[] {new RawListCtl(), new UnboundedCtl(),
+                new ObjectListCtl(), new SuperBoundCtl(), new TypeVariableCtl(),
+                new NestedListCtl()}) {
+            IllegalArgumentException e = assertThrows(
+                    IllegalArgumentException.class,
+                    () -> Turismo.controller(ctl), ctl.getClass().getName());
+            assertTrue(e.getMessage().contains("type argument"),
+                    e.getMessage());
+        }
+    }
+
+    @Test
+    public void testCollectionsOfUnsupportedTypesRejected() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> Turismo.controller(new ArrayElementCtl()));
+        assertTrue(e.getMessage().contains("java.util.List<int[]>"),
+                e.getMessage());
+        e = assertThrows(IllegalArgumentException.class,
+                () -> Turismo.controller(new ConcreteListCtl()));
+        assertTrue(e.getMessage().contains("java.util.ArrayList"),
+                e.getMessage());
     }
 
     // ---------------------------------------------------------------

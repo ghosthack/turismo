@@ -270,6 +270,11 @@ void signup(@Param("email") String email, @Param("age") int age) {
 void cart(String[] sku, int[] qty, BigDecimal discount, Boolean gift) {
     ...
 }
+
+@POST("/subscribe")                      // form: topic=java&topic=http
+void subscribe(Set<String> topic, List<Integer> day) {
+    ...
+}
 ```
 
 - Supported types: `String`, primitives and their wrappers (`boolean` and
@@ -277,8 +282,13 @@ void cart(String[] sku, int[] qty, BigDecimal discount, Boolean gift) {
   enums (by constant name) and `UUID`. A `Context` argument receives the
   request context and an `InputStream` argument the request body.
 - An array of any of those (`String[]`, `int[]`, `Boolean[]`,
-  `BigDecimal[]`, ...) receives every value of a repeated parameter, in
-  order; if the parameter is absent the array is empty.
+  `BigDecimal[]`, ...), or a `List`, `Collection`, `Iterable` or `Set` of
+  one (`List<Integer>`, `Set<Size>`), receives every value of a repeated
+  parameter, in order; if the parameter is absent it's empty. A `Set` is a
+  `LinkedHashSet` (request order, duplicates dropped), the others an
+  `ArrayList`; each request gets a fresh, mutable one. The element type
+  must be spelled out: a raw `List`, `List<?>` or `List<Object>` is
+  rejected at registration.
 - A value that can't be converted (`/items/abc` for an `int`), or a
   missing value for a primitive, gets `400 Bad Request`. A missing value
   for any other type is passed as `null`.

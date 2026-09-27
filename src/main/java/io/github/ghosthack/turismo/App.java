@@ -282,7 +282,8 @@ public class App {
      * and form parameters by name (see {@link io.github.ghosthack.turismo.annotation.Param
      * @Param}), converted to {@code String}, primitives and their
      * wrappers, {@code BigInteger}, {@code BigDecimal}, enums or
-     * {@code UUID}, or an array of these for a repeated parameter
+     * {@code UUID}, or an array, {@code List}, {@code Collection},
+     * {@code Iterable} or {@code Set} of these for a repeated parameter
      * ({@code ?tag=a&tag=b}); a {@link Context} argument gets the
      * request context and an {@code InputStream} argument the request
      * body. A parameter value that can't be converted, or is missing for
