@@ -2,18 +2,19 @@ package io.github.ghosthack.turismo.resolver;
 
 import static io.github.ghosthack.turismo.HttpMocks.getRequestMock;
 import static io.github.ghosthack.turismo.HttpMocks.getResponseMock;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.verify;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import io.github.ghosthack.turismo.servlet.Env;
 
@@ -21,12 +22,12 @@ public class ListResolverTest {
 
     private ListResolver resolver;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         resolver = new ListResolver();
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         Env.destroy();
     }
@@ -214,29 +215,35 @@ public class ListResolverTest {
         assertEquals("77", Env.params("id"));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testRouteAliasingNonExistentTarget() {
-        resolver.route("GET", "/source", new Runnable() {
-            @Override
-            public void run() { }
+        assertThrows(IllegalArgumentException.class, () -> {
+            resolver.route("GET", "/source", new Runnable() {
+                @Override
+                public void run() { }
+            });
+            resolver.route("GET", "/alias", "/nonexistent");
         });
-        resolver.route("GET", "/alias", "/nonexistent");
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testRouteAliasingNonExistentMethod() {
-        resolver.route("GET", "/source", new Runnable() {
-            @Override
-            public void run() { }
+        assertThrows(IllegalArgumentException.class, () -> {
+            resolver.route("GET", "/source", new Runnable() {
+                @Override
+                public void run() { }
+            });
+            resolver.route("POST", "/alias", "/source");
         });
-        resolver.route("POST", "/alias", "/source");
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testParsedEntryNullPath() {
-        new ListResolver.ParsedEntry(new Runnable() {
-            @Override
-            public void run() { }
-        }, null);
+        assertThrows(IllegalArgumentException.class, () -> {
+            new ListResolver.ParsedEntry(new Runnable() {
+                @Override
+                public void run() { }
+            }, null);
+        });
     }
 }

@@ -2,17 +2,18 @@ package io.github.ghosthack.turismo.resolver;
 
 import static io.github.ghosthack.turismo.HttpMocks.getRequestMock;
 import static io.github.ghosthack.turismo.HttpMocks.getResponseMock;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.verify;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import io.github.ghosthack.turismo.servlet.Env;
 
@@ -20,12 +21,12 @@ public class MapResolverTest {
 
     private MapResolver resolver;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         resolver = new MapResolver();
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         Env.destroy();
     }
@@ -68,7 +69,7 @@ public class MapResolverTest {
 
         Runnable resolved = resolver.resolve();
         resolved.run();
-        org.junit.Assert.assertFalse(called[0]);
+        org.junit.jupiter.api.Assertions.assertFalse(called[0]);
         verify(res).setHeader("Allow", "GET, HEAD");
         verify(res).sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
     }
@@ -144,8 +145,10 @@ public class MapResolverTest {
         assertNull(resolved);
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void testRouteAliasingNotSupported() {
-        resolver.route("GET", "/from", "/to");
+        assertThrows(UnsupportedOperationException.class, () -> {
+            resolver.route("GET", "/from", "/to");
+        });
     }
 }

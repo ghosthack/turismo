@@ -26,12 +26,13 @@ import java.util.concurrent.TimeUnit;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
+import io.github.ghosthack.turismo.App;
 import io.github.ghosthack.turismo.Turismo;
 
 /**
  * Embedded HTTP server backed by the JDK's built-in {@link HttpServer}.
- * Routes are defined via the {@link Turismo} static API and dispatched
- * automatically.
+ * Serves the routes of an {@link App}; usually started through
+ * {@link App#start(int)} or {@link Turismo#start(int)}.
  *
  * <pre>{@code
  * import static io.github.ghosthack.turismo.Turismo.*;
@@ -43,7 +44,7 @@ import io.github.ghosthack.turismo.Turismo;
  * <p>The server can also be used directly for more control:
  *
  * <pre>{@code
- * Server server = new Server(8080);
+ * Server server = new Server(app, 8080);
  * server.start();
  * // ...
  * server.stop();
@@ -59,16 +60,34 @@ public class Server {
     private static final System.Logger LOG =
             System.getLogger(Server.class.getName());
 
+    private final App app;
     private final HttpServer server;
     private final ExecutorService executor;
 
     /**
-     * Creates a server bound to the given port.
+     * Creates a server for the {@linkplain Turismo#app() default app},
+     * bound to the given port.
      *
      * @param port the port to listen on (use 0 for a random available port)
      * @throws IOException if the server socket cannot be created
      */
     public Server(int port) throws IOException {
+        this(Turismo.app(), port);
+    }
+
+    /**
+     * Creates a server for the given app, bound to the given port.
+     *
+     * @param app  the app whose routes are served
+     * @param port the port to listen on (use 0 for a random available port)
+     * @throws IOException if the server socket cannot be created
+     * @throws IllegalArgumentException if app is null
+     */
+    public Server(App app, int port) throws IOException {
+        if (app == null) {
+            throw new IllegalArgumentException("app must not be null");
+        }
+        this.app = app;
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         this.server.createContext("/", this::handle);
         this.executor = Executors.newThreadPerTaskExecutor(
@@ -138,7 +157,7 @@ public class Server {
         HttpContext ctx = new HttpContext(exchange);
         try {
             try {
-                Turismo.handle(ctx);
+                app.handle(ctx);
             } catch (Throwable t) {
                 // Catch Errors too, otherwise the client gets no response
                 LOG.log(System.Logger.Level.ERROR,

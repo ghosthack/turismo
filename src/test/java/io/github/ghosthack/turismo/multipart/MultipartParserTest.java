@@ -1,6 +1,6 @@
 package io.github.ghosthack.turismo.multipart;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -21,14 +21,14 @@ import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 public class MultipartParserTest {
 
     private static final String BOUNDARY = "XyZ";
 
-    @After
+    @AfterEach
     public void tearDown() {
         MultipartParser.setMaxContentSize(MultipartParser.DEFAULT_MAX_CONTENT_SIZE);
     }
@@ -157,35 +157,43 @@ public class MultipartParserTest {
                         .fields.get("city"));
     }
 
-    @Test(expected = ParseException.class)
+    @Test
     public void testMissingBoundary() throws Exception {
-        parse("no multipart here");
+        assertThrows(ParseException.class, () -> {
+            parse("no multipart here");
+        });
     }
 
-    @Test(expected = ParseException.class)
+    @Test
     public void testUnterminatedPart() throws Exception {
-        parse("--XyZ\r\n"
-                + "Content-Disposition: form-data; name=\"a\"\r\n"
-                + "\r\n"
-                + "value without closing boundary");
+        assertThrows(ParseException.class, () -> {
+            parse("--XyZ\r\n"
+                    + "Content-Disposition: form-data; name=\"a\"\r\n"
+                    + "\r\n"
+                    + "value without closing boundary");
+        });
     }
 
-    @Test(expected = ParseException.class)
+    @Test
     public void testPartWithoutDisposition() throws Exception {
-        parse("--XyZ\r\nContent-Type: text/plain\r\n\r\nx\r\n--XyZ--");
+        assertThrows(ParseException.class, () -> {
+            parse("--XyZ\r\nContent-Type: text/plain\r\n\r\nx\r\n--XyZ--");
+        });
     }
 
-    @Test(expected = ContentTooLargeException.class)
+    @Test
     public void testDeclaredSizeOverLimitRejectedBeforeReading() throws Exception {
-        MultipartParser.setMaxContentSize(10);
-        InputStream failing = new InputStream() {
-            @Override
-            public int read() throws IOException {
-                throw new AssertionError("body must not be read");
-            }
-        };
-        new MultipartParser(failing, "--" + BOUNDARY, new Collector(),
-                "UTF-8", 11L).parse();
+        assertThrows(ContentTooLargeException.class, () -> {
+            MultipartParser.setMaxContentSize(10);
+            InputStream failing = new InputStream() {
+                @Override
+                public int read() throws IOException {
+                    throw new AssertionError("body must not be read");
+                }
+            };
+            new MultipartParser(failing, "--" + BOUNDARY, new Collector(),
+                    "UTF-8", 11L).parse();
+        });
     }
 
     @Test
@@ -250,26 +258,32 @@ public class MultipartParserTest {
         assertEquals("São Paulo", mr.getParameter("city"));
     }
 
-    @Test(expected = ParseException.class)
+    @Test
     public void testWrapAndParseWithoutBoundary() throws Exception {
-        MultipartRequest.wrapAndParse(request("multipart/form-data",
-                new byte[0], 0));
+        assertThrows(ParseException.class, () -> {
+            MultipartRequest.wrapAndParse(request("multipart/form-data",
+                    new byte[0], 0));
+        });
     }
 
-    @Test(expected = ContentTooLargeException.class)
+    @Test
     public void testWrapAndParseDeclaredTooLarge() throws Exception {
-        MultipartRequest.wrapAndParse(request(
-                "multipart/form-data; boundary=XyZ", new byte[0],
-                MultipartParser.getMaxContentSize() + 1L));
+        assertThrows(ContentTooLargeException.class, () -> {
+            MultipartRequest.wrapAndParse(request(
+                    "multipart/form-data; boundary=XyZ", new byte[0],
+                    MultipartParser.getMaxContentSize() + 1L));
+        });
     }
 
-    @Test(expected = ParseException.class)
+    @Test
     public void testWrapAndParseUnsupportedCharset() throws Exception {
-        byte[] body = SIMPLE_BODY.getBytes(StandardCharsets.UTF_8);
-        HttpServletRequest req = request(
-                "multipart/form-data; boundary=XyZ", body, body.length);
-        when(req.getCharacterEncoding()).thenReturn("no-such-charset");
-        MultipartRequest.wrapAndParse(req);
+        assertThrows(ParseException.class, () -> {
+            byte[] body = SIMPLE_BODY.getBytes(StandardCharsets.UTF_8);
+            HttpServletRequest req = request(
+                    "multipart/form-data; boundary=XyZ", body, body.length);
+            when(req.getCharacterEncoding()).thenReturn("no-such-charset");
+            MultipartRequest.wrapAndParse(req);
+        });
     }
 
     @Test

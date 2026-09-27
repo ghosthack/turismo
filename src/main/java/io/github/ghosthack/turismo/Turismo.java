@@ -16,26 +16,16 @@
 
 package io.github.ghosthack.turismo;
 
-import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.lang.annotation.Annotation;
 import java.lang.reflect.Array;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.lang.reflect.RecordComponent;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 import io.github.ghosthack.turismo.annotation.DELETE;
 import io.github.ghosthack.turismo.annotation.GET;
@@ -53,7 +43,7 @@ import io.github.ghosthack.turismo.util.Validation;
  * <pre>{@code
  * import static io.github.ghosthack.turismo.Turismo.*;
  *
- * public class App {
+ * public class Main {
  *     public static void main(String[] args) {
  *         get("/hello", () -> print("Hello World"));
  *         get("/users/:id", () -> print("User " + param("id")));
@@ -66,6 +56,14 @@ import io.github.ghosthack.turismo.util.Validation;
  * wildcards ({@code *}). Named parameters are accessible via
  * {@link #param(String)}, which falls back to query string parameters.
  *
+ * <p>The registration and server methods ({@code get()}, {@code start()},
+ * ...) act on a shared default {@link App}, returned by {@link #app()}.
+ * Create more {@code App} instances for separate route sets, for example
+ * several servers in one JVM or an isolated app per test. The request and
+ * response helpers ({@code param()}, {@code print()}, ...) work inside the
+ * handlers of any app.
+ *
+ * @see App
  * @see Context
  * @see io.github.ghosthack.turismo.http.Server
  */
@@ -75,19 +73,24 @@ public final class Turismo {
     private static final ThreadLocal<Map<String, String>> PATH_PARAMS =
             new ThreadLocal<>();
 
-    private static final Map<String, Map<String, Runnable>> EXACT =
-            new ConcurrentHashMap<>();
-    private static final List<PatternRoute> PATTERNS =
-            new CopyOnWriteArrayList<>();
-    private static volatile Runnable NOT_FOUND = Turismo::defaultNotFound;
-    private static volatile Server server;
+    private static final App APP = new App();
 
     private Turismo() {
     }
 
     // ---------------------------------------------------------------
-    // Route registration
+    // Route registration (default app)
     // ---------------------------------------------------------------
+
+    /**
+     * Returns the default app that the static registration and server
+     * methods of this class act on.
+     *
+     * @return the default app
+     */
+    public static App app() {
+        return APP;
+    }
 
     /**
      * Registers a GET route.
@@ -96,7 +99,7 @@ public final class Turismo {
      * @param action the action to execute
      */
     public static void get(String path, Runnable action) {
-        route("GET", path, action);
+        APP.get(path, action);
     }
 
     /**
@@ -106,28 +109,27 @@ public final class Turismo {
      * @param body the response body text
      */
     public static void get(String path, String body) {
-        route("GET", path, () -> print(body));
+        APP.get(path, body);
     }
 
     /**
-     * Registers a POST route. The default status code is 201 (Created).
+     * Registers a POST route.
      *
      * @param path   the URL path pattern
      * @param action the action to execute
      */
     public static void post(String path, Runnable action) {
-        route("POST", path, () -> { status(201); action.run(); });
+        APP.post(path, action);
     }
 
     /**
      * Registers a POST route that returns a fixed string body.
-     * The default status code is 201 (Created).
      *
      * @param path the URL path pattern
      * @param body the response body text
      */
     public static void post(String path, String body) {
-        route("POST", path, () -> { status(201); print(body); });
+        APP.post(path, body);
     }
 
     /**
@@ -137,7 +139,7 @@ public final class Turismo {
      * @param action the action to execute
      */
     public static void put(String path, Runnable action) {
-        route("PUT", path, action);
+        APP.put(path, action);
     }
 
     /**
@@ -147,7 +149,7 @@ public final class Turismo {
      * @param body the response body text
      */
     public static void put(String path, String body) {
-        route("PUT", path, () -> print(body));
+        APP.put(path, body);
     }
 
     /**
@@ -157,7 +159,7 @@ public final class Turismo {
      * @param action the action to execute
      */
     public static void delete(String path, Runnable action) {
-        route("DELETE", path, action);
+        APP.delete(path, action);
     }
 
     /**
@@ -167,7 +169,7 @@ public final class Turismo {
      * @param body the response body text
      */
     public static void delete(String path, String body) {
-        route("DELETE", path, () -> print(body));
+        APP.delete(path, body);
     }
 
     /**
@@ -177,7 +179,7 @@ public final class Turismo {
      * @param action the action to execute
      */
     public static void patch(String path, Runnable action) {
-        route("PATCH", path, action);
+        APP.patch(path, action);
     }
 
     /**
@@ -187,7 +189,7 @@ public final class Turismo {
      * @param body the response body text
      */
     public static void patch(String path, String body) {
-        route("PATCH", path, () -> print(body));
+        APP.patch(path, body);
     }
 
     /**
@@ -198,7 +200,7 @@ public final class Turismo {
      * @param action the action to execute
      */
     public static void head(String path, Runnable action) {
-        route("HEAD", path, action);
+        APP.head(path, action);
     }
 
     /**
@@ -208,7 +210,7 @@ public final class Turismo {
      * @param action the action to execute
      */
     public static void options(String path, Runnable action) {
-        route("OPTIONS", path, action);
+        APP.options(path, action);
     }
 
     /**
@@ -218,10 +220,7 @@ public final class Turismo {
      * @throws IllegalArgumentException if action is null
      */
     public static void notFound(Runnable action) {
-        if (action == null) {
-            throw new IllegalArgumentException("action must not be null");
-        }
-        NOT_FOUND = action;
+        APP.notFound(action);
     }
 
     /**
@@ -236,27 +235,8 @@ public final class Turismo {
      *         path does not start with {@code /}
      */
     public static void route(String method, String path, Runnable action) {
-        if (method == null || method.isEmpty()) {
-            throw new IllegalArgumentException("method must not be empty");
-        }
-        if (path == null || !path.startsWith("/")) {
-            throw new IllegalArgumentException(
-                    "path must start with '/': " + path);
-        }
-        if (action == null) {
-            throw new IllegalArgumentException("action must not be null");
-        }
-        if (path.contains(":") || path.contains("*")) {
-            PATTERNS.add(new PatternRoute(method, path, action));
-        } else {
-            EXACT.computeIfAbsent(method, k -> new ConcurrentHashMap<>())
-                 .put(path, action);
-        }
+        APP.route(method, path, action);
     }
-
-    // ---------------------------------------------------------------
-    // Controller registration
-    // ---------------------------------------------------------------
 
     /**
      * Registers an annotated controller instance. Scans the instance's
@@ -283,91 +263,7 @@ public final class Turismo {
      *         methods, or an annotated method takes parameters
      */
     public static void controller(Object instance) {
-        int count = 0;
-        // Names of registered overridable methods: a subclass's annotated
-        // override replaces the superclass's route instead of adding to it.
-        Set<String> registered = new HashSet<>();
-        for (Class<?> c = instance.getClass(); c != null && c != Object.class;
-                c = c.getSuperclass()) {
-            for (Method m : c.getDeclaredMethods()) {
-                if (m.isSynthetic() || m.isBridge()) {
-                    continue;
-                }
-                boolean overridable = !Modifier.isPrivate(m.getModifiers())
-                        && !Modifier.isStatic(m.getModifiers());
-                if (overridable && registered.contains(m.getName())) {
-                    continue;
-                }
-                boolean annotated = false;
-                for (Annotation a : m.getDeclaredAnnotations()) {
-                    String httpMethod = httpMethod(a);
-                    if (httpMethod == null) {
-                        continue;
-                    }
-                    if (m.getParameterCount() != 0) {
-                        throw new IllegalArgumentException(
-                                "Route method must take no parameters: "
-                                + c.getName() + "." + m.getName());
-                    }
-                    m.setAccessible(true);
-                    Runnable action = toAction(instance, m);
-                    String path = routePath(a);
-                    if ("POST".equals(httpMethod)) {
-                        route(httpMethod, path,
-                                () -> { status(201); action.run(); });
-                    } else {
-                        route(httpMethod, path, action);
-                    }
-                    annotated = true;
-                    count++;
-                }
-                if (annotated && overridable) {
-                    registered.add(m.getName());
-                }
-            }
-        }
-        if (count == 0) {
-            throw new IllegalArgumentException(
-                    "No annotated routes found in "
-                    + instance.getClass().getName());
-        }
-    }
-
-    private static String httpMethod(Annotation a) {
-        if (a instanceof GET) return "GET";
-        if (a instanceof POST) return "POST";
-        if (a instanceof PUT) return "PUT";
-        if (a instanceof DELETE) return "DELETE";
-        if (a instanceof PATCH) return "PATCH";
-        return null;
-    }
-
-    private static String routePath(Annotation a) {
-        if (a instanceof GET g) return g.value();
-        if (a instanceof POST p) return p.value();
-        if (a instanceof PUT p) return p.value();
-        if (a instanceof DELETE d) return d.value();
-        if (a instanceof PATCH p) return p.value();
-        throw new IllegalArgumentException("Not a route annotation: " + a);
-    }
-
-    private static Runnable toAction(Object instance, Method method) {
-        return () -> {
-            try {
-                method.invoke(instance);
-            } catch (InvocationTargetException e) {
-                Throwable cause = e.getCause();
-                if (cause instanceof RuntimeException re) {
-                    throw re;
-                }
-                if (cause instanceof Error err) {
-                    throw err;
-                }
-                throw new RuntimeException(cause);
-            } catch (IllegalAccessException e) {
-                throw new RuntimeException(e);
-            }
-        };
+        APP.controller(instance);
     }
 
     // ---------------------------------------------------------------
@@ -744,7 +640,7 @@ public final class Turismo {
     }
 
     // ---------------------------------------------------------------
-    // Server lifecycle
+    // Server lifecycle (default app)
     // ---------------------------------------------------------------
 
     /**
@@ -756,27 +652,8 @@ public final class Turismo {
      * @param port the port to listen on (use 0 for a random available port)
      * @throws IllegalStateException if a server is already running
      */
-    public static synchronized void start(int port) {
-        if (server != null) {
-            throw new IllegalStateException(
-                    "Server already running on port " + server.port()
-                    + "; call stop() first");
-        }
-        Server s;
-        try {
-            s = new Server(port);
-        } catch (Exception e) {
-            throw new RuntimeException(
-                    "Failed to start server on port " + port, e);
-        }
-        try {
-            s.start();
-        } catch (RuntimeException e) {
-            s.stop();
-            throw new RuntimeException(
-                    "Failed to start server on port " + port, e);
-        }
-        server = s;
+    public static void start(int port) {
+        APP.start(port);
     }
 
     /**
@@ -787,12 +664,8 @@ public final class Turismo {
      * @param grace how long to wait for requests in progress
      * @throws IllegalArgumentException if grace is null or negative
      */
-    public static synchronized void stop(Duration grace) {
-        Server s = server;
-        if (s != null) {
-            s.stop(grace);
-            server = null;
-        }
+    public static void stop(Duration grace) {
+        APP.stop(grace);
     }
 
     /**
@@ -800,12 +673,8 @@ public final class Turismo {
      * Requests still in progress are interrupted; use
      * {@link #stop(Duration)} to let them finish.
      */
-    public static synchronized void stop() {
-        Server s = server;
-        if (s != null) {
-            s.stop();
-            server = null;
-        }
+    public static void stop() {
+        APP.stop();
     }
 
     /**
@@ -816,21 +685,13 @@ public final class Turismo {
      * @throws IllegalStateException if no server is running
      */
     public static int port() {
-        Server s = server;
-        if (s == null) {
-            throw new IllegalStateException("Server not started");
-        }
-        return s.port();
+        return APP.port();
     }
 
-    // ---------------------------------------------------------------
-    // Framework
-    // ---------------------------------------------------------------
-
     /**
-     * Dispatches a request through the routing engine. Resolves the
-     * route for the given context, sets up the thread-local environment,
-     * and executes the matching action.
+     * Dispatches a request through the default app's routes. Resolves
+     * the route for the given context, sets up the thread-local
+     * environment, and executes the matching action.
      *
      * <p>Transport adapters (such as {@link Server}) call this method
      * for each incoming request. Custom transport implementations can
@@ -839,213 +700,51 @@ public final class Turismo {
      * @param ctx the request/response context
      */
     public static void handle(Context ctx) {
-        RouteMatch match = resolve(ctx.method(), ctx.path(), ctx.rawPath());
-        CONTEXT.set(ctx);
-        PATH_PARAMS.set(match.params);
-        try {
-            match.action.run();
-        } finally {
-            CONTEXT.remove();
-            PATH_PARAMS.remove();
-        }
+        APP.handle(ctx);
     }
 
     /**
-     * Clears all registered routes and stops the server if running.
-     * Intended for use in tests.
+     * Clears all routes of the default app, restores its default
+     * not-found handler, and stops its server if running. Tests that
+     * need isolation can use a fresh {@link App} instead.
      */
     public static void reset() {
-        stop();
-        EXACT.clear();
-        PATTERNS.clear();
-        NOT_FOUND = Turismo::defaultNotFound;
+        APP.reset();
     }
 
     // ---------------------------------------------------------------
     // Internal
     // ---------------------------------------------------------------
 
-    static RouteMatch resolve(String method, String path) {
-        return resolve(method, path, null);
-    }
-
     /**
-     * Resolves a route. Pattern routes are matched against the segments
-     * of {@code rawPath} (each percent-decoded on its own, so an encoded
-     * {@code /} stays inside its segment) when it is available, otherwise
-     * against the segments of the decoded {@code path}.
+     * Binds a request context to the current thread; used by {@link App}.
+     * Returns the previous binding, to be restored with {@link #restore},
+     * so an app can dispatch to another from inside a handler.
      */
-    static RouteMatch resolve(String method, String path, String rawPath) {
-        String[] segments = segments(path, rawPath);
-        // An encoded slash is part of a segment, not a separator, so the
-        // decoded path must not be used to look up an exact route: that
-        // would let /admin%2Fsecret reach the /admin/secret route
-        String exactPath = hasEncodedSlash(rawPath) ? null : path;
-        RouteMatch match = find(method, exactPath, segments);
-        if (match == null && "HEAD".equals(method)) {
-            match = find("GET", exactPath, segments);
-        }
-        if (match != null) {
-            return match;
-        }
-        Set<String> allowed = allowedMethods(exactPath, segments);
-        if (!allowed.isEmpty()) {
-            return new RouteMatch(() -> methodNotAllowed(allowed),
-                    Collections.emptyMap());
-        }
-        return new RouteMatch(NOT_FOUND, Collections.emptyMap());
+    static Object[] bind(Context ctx, Map<String, String> params) {
+        Object[] previous = {CONTEXT.get(), PATH_PARAMS.get()};
+        CONTEXT.set(ctx);
+        PATH_PARAMS.set(params);
+        return previous;
     }
 
-    private static RouteMatch find(String method, String path,
-            String[] segments) {
-        // Exact match (O(1) HashMap lookup)
-        Map<String, Runnable> methodRoutes = EXACT.get(method);
-        if (methodRoutes != null && path != null) {
-            Runnable action = methodRoutes.get(path);
-            if (action != null) {
-                return new RouteMatch(action, Collections.emptyMap());
-            }
+    @SuppressWarnings("unchecked")
+    static void restore(Object[] previous) {
+        if (previous[0] == null) {
+            CONTEXT.remove();
+            PATH_PARAMS.remove();
+        } else {
+            CONTEXT.set((Context) previous[0]);
+            PATH_PARAMS.set((Map<String, String>) previous[1]);
         }
-        // Pattern match (linear scan)
-        if (segments != null) {
-            for (PatternRoute pr : PATTERNS) {
-                if (!pr.method.equals(method)) {
-                    continue;
-                }
-                Map<String, String> params = pr.pattern.match(segments);
-                if (params != null) {
-                    return new RouteMatch(pr.action, params);
-                }
-            }
-        }
-        return null;
     }
 
-    /** Methods with a route for this path, for the 405 Allow header. */
-    private static Set<String> allowedMethods(String path, String[] segments) {
-        Set<String> allowed = new TreeSet<>();
-        if (path != null) {
-            for (Map.Entry<String, Map<String, Runnable>> e : EXACT.entrySet()) {
-                if (e.getValue().containsKey(path)) {
-                    allowed.add(e.getKey());
-                }
-            }
-        }
-        if (segments != null) {
-            for (PatternRoute pr : PATTERNS) {
-                if (pr.pattern.match(segments) != null) {
-                    allowed.add(pr.method);
-                }
-            }
-        }
-        if (allowed.contains("GET")) {
-            allowed.add("HEAD");
-        }
-        return allowed;
-    }
-
-    private static void methodNotAllowed(Set<String> allowed) {
-        status(405);
-        header("Allow", String.join(", ", allowed));
-        print("Method Not Allowed");
-    }
-
-    private static boolean hasEncodedSlash(String rawPath) {
-        if (rawPath == null) {
-            return false;
-        }
-        for (int i = rawPath.indexOf('%'); i >= 0 && i + 2 < rawPath.length();
-                i = rawPath.indexOf('%', i + 1)) {
-            if (rawPath.charAt(i + 1) == '2'
-                    && (rawPath.charAt(i + 2) == 'F'
-                        || rawPath.charAt(i + 2) == 'f')) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static String[] segments(String path, String rawPath) {
-        if (rawPath == null) {
-            return path != null ? path.split("/") : null;
-        }
-        String[] segments = rawPath.split("/");
-        for (int i = 0; i < segments.length; i++) {
-            segments[i] = percentDecode(segments[i]);
-        }
-        return segments;
-    }
-
-    /**
-     * Decodes {@code %XX} escapes as UTF-8. Unlike {@link
-     * java.net.URLDecoder}, {@code +} is left alone (it is literal in
-     * paths) and malformed escapes are kept as-is.
-     */
-    static String percentDecode(String s) {
-        if (s.indexOf('%') < 0) {
-            return s;
-        }
-        StringBuilder sb = new StringBuilder(s.length());
-        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        int i = 0;
-        while (i < s.length()) {
-            while (i + 2 < s.length() && s.charAt(i) == '%'
-                    && hex(s.charAt(i + 1)) >= 0 && hex(s.charAt(i + 2)) >= 0) {
-                bytes.write(hex(s.charAt(i + 1)) << 4 | hex(s.charAt(i + 2)));
-                i += 3;
-            }
-            if (bytes.size() > 0) {
-                sb.append(bytes.toString(StandardCharsets.UTF_8));
-                bytes.reset();
-            }
-            if (i < s.length()) {
-                sb.append(s.charAt(i++));
-            }
-        }
-        return sb.toString();
-    }
-
-    private static int hex(char c) {
-        return Character.digit(c, 16);
-    }
-
-    private static void defaultNotFound() {
+    static void defaultNotFound() {
         status(404);
         print("Not Found");
     }
 
     static void validateLocation(String url) {
         Validation.validateLocation(url);
-    }
-
-    // ---------------------------------------------------------------
-    // Inner classes
-    // ---------------------------------------------------------------
-
-    /** A resolved route with its extracted path parameters. */
-    static class RouteMatch {
-        final Runnable action;
-        final Map<String, String> params;
-
-        RouteMatch(Runnable action, Map<String, String> params) {
-            this.action = action;
-            this.params = params;
-        }
-    }
-
-    /**
-     * A route pattern that supports named parameters ({@code :name})
-     * and wildcards ({@code *}). Delegates to {@link PathPattern}.
-     */
-    static class PatternRoute {
-        final String method;
-        final PathPattern pattern;
-        final Runnable action;
-
-        PatternRoute(String method, String path, Runnable action) {
-            this.method = method;
-            this.pattern = new PathPattern(path);
-            this.action = action;
-        }
     }
 }

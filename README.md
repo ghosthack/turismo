@@ -32,7 +32,7 @@ Zero dependencies -- uses the JDK's built-in HTTP server:
 ```java
 import static io.github.ghosthack.turismo.Turismo.*;
 
-public class App {
+public class Main {
     public static void main(String[] args) {
         get("/hello", "Hello World!");
         get("/users/:id", () -> print("User ", param("id")));
@@ -51,7 +51,7 @@ For a runnable starter project, including a servlet deployment example, see
 
 ```java
 get("/hello", "Hello!");
-post("/submit", () -> print("Created")); // defaults to 201
+post("/submit", () -> print("Submitted"));
 ```
 
 ### Named parameters
@@ -96,12 +96,19 @@ HEAD requests without a `head` route are served by the matching GET route,
 with the body discarded. A request whose path matches a route registered only
 for other methods gets `405 Method Not Allowed` with an `Allow` header.
 
-POST routes default to status 201 (Created):
+Every route responds `200 OK` unless the handler sets a status, POST
+included:
 
 ```java
-post("/data", () -> print("created"));        // 201
+post("/users", () -> {
+    status(201);                               // Created
+    json(Map.of("id", 42));
+});
 delete("/users/:id", () -> print("Deleted ", param("id")));
 ```
+
+> **Upgrading from 4.x:** POST routes used to default to `201`. Add
+> `status(201)` to handlers that relied on it.
 
 ## Response helpers
 
@@ -203,6 +210,30 @@ replaces the superclass's route.
 Controller routes use the same routing engine as lambda routes and can be
 freely mixed. All request/response methods (`param()`, `print()`, `json()`,
 etc.) work the same way inside annotated methods.
+
+## Multiple apps
+
+The static `get()`/`start()`/... methods register routes on one shared default
+app. Create `App` instances for independent route sets, for example two
+servers in one JVM, or a fresh app per test instead of calling `reset()`:
+
+```java
+import static io.github.ghosthack.turismo.Turismo.*;
+
+App api = new App();
+api.get("/users/:id", () -> json(Map.of("id", param("id"))));
+api.start(8080);
+
+App admin = new App();
+admin.get("/health", "ok");
+admin.start(9090);
+```
+
+`App` has the same registration and server methods (`get`, `post`, ...,
+`route`, `controller`, `notFound`, `start`, `stop`, `port`, `handle`,
+`reset`). Handlers use the usual static helpers (`param()`, `print()`,
+`json()`, ...), which work for whichever app is serving the request.
+`Turismo.app()` returns the default app.
 
 ## Concurrency
 

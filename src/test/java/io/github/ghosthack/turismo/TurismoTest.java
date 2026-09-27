@@ -1,6 +1,6 @@
 package io.github.ghosthack.turismo;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -13,8 +13,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import io.github.ghosthack.turismo.annotation.DELETE;
 import io.github.ghosthack.turismo.annotation.GET;
@@ -24,7 +24,7 @@ import io.github.ghosthack.turismo.annotation.PUT;
 
 public class TurismoTest {
 
-    @After
+    @AfterEach
     public void tearDown() {
         Turismo.reset();
     }
@@ -38,7 +38,7 @@ public class TurismoTest {
         Runnable action = () -> {};
         Turismo.get("/hello", action);
 
-        Turismo.RouteMatch match = Turismo.resolve("GET", "/hello");
+        App.RouteMatch match = Turismo.app().resolve("GET", "/hello");
         assertSame(action, match.action);
         assertTrue(match.params.isEmpty());
     }
@@ -46,20 +46,17 @@ public class TurismoTest {
     @Test
     public void testExactRouteMethodIsolation() {
         Runnable getAction = () -> {};
+        Runnable postAction = () -> {};
         Turismo.get("/resource", getAction);
-        Turismo.post("/resource", () -> {});
+        Turismo.post("/resource", postAction);
 
-        assertSame(getAction, Turismo.resolve("GET", "/resource").action);
-        // POST wraps the action to set status 201, so test it via handle
-        assertNotNull(Turismo.resolve("POST", "/resource").action);
-        assertNotSame(
-                Turismo.resolve("GET", "/resource").action,
-                Turismo.resolve("POST", "/resource").action);
+        assertSame(getAction, Turismo.app().resolve("GET", "/resource").action);
+        assertSame(postAction, Turismo.app().resolve("POST", "/resource").action);
     }
 
     @Test
     public void testNoMatchReturnsNotFoundHandler() {
-        Turismo.RouteMatch match = Turismo.resolve("GET", "/missing");
+        App.RouteMatch match = Turismo.app().resolve("GET", "/missing");
         assertNotNull(match.action);
         assertTrue(match.params.isEmpty());
     }
@@ -69,7 +66,7 @@ public class TurismoTest {
         Runnable action = () -> {};
         Turismo.get("/users/:id", action);
 
-        Turismo.RouteMatch match = Turismo.resolve("GET", "/users/42");
+        App.RouteMatch match = Turismo.app().resolve("GET", "/users/42");
         assertSame(action, match.action);
         assertEquals("42", match.params.get("id"));
     }
@@ -79,7 +76,7 @@ public class TurismoTest {
         Runnable action = () -> {};
         Turismo.get("/users/:userId/posts/:postId", action);
 
-        Turismo.RouteMatch match = Turismo.resolve("GET", "/users/7/posts/99");
+        App.RouteMatch match = Turismo.app().resolve("GET", "/users/7/posts/99");
         assertSame(action, match.action);
         assertEquals("7", match.params.get("userId"));
         assertEquals("99", match.params.get("postId"));
@@ -90,7 +87,7 @@ public class TurismoTest {
         Runnable action = () -> {};
         Turismo.get("/files/*/download", action);
 
-        Turismo.RouteMatch match = Turismo.resolve("GET", "/files/report/download");
+        App.RouteMatch match = Turismo.app().resolve("GET", "/files/report/download");
         assertSame(action, match.action);
         assertTrue(match.params.isEmpty());
     }
@@ -99,7 +96,7 @@ public class TurismoTest {
     public void testPatternRouteMethodMismatch() {
         Turismo.get("/users/:id", () -> {});
 
-        Turismo.RouteMatch match = Turismo.resolve("POST", "/users/42");
+        App.RouteMatch match = Turismo.app().resolve("POST", "/users/42");
         // Should fall through to not-found
         assertEquals(0, match.params.size());
     }
@@ -109,7 +106,7 @@ public class TurismoTest {
         Turismo.get("/users/:id", () -> {});
 
         // Too many segments
-        Turismo.RouteMatch match = Turismo.resolve("GET", "/users/42/extra");
+        App.RouteMatch match = Turismo.app().resolve("GET", "/users/42/extra");
         assertTrue(match.params.isEmpty());
     }
 
@@ -121,7 +118,7 @@ public class TurismoTest {
         Turismo.get("/users/:id", pattern);
 
         // Exact match should win
-        assertSame(exact, Turismo.resolve("GET", "/users/admin").action);
+        assertSame(exact, Turismo.app().resolve("GET", "/users/admin").action);
     }
 
     @Test
@@ -129,7 +126,7 @@ public class TurismoTest {
         Runnable custom = () -> {};
         Turismo.notFound(custom);
 
-        assertSame(custom, Turismo.resolve("GET", "/whatever").action);
+        assertSame(custom, Turismo.app().resolve("GET", "/whatever").action);
     }
 
     @Test
@@ -143,13 +140,13 @@ public class TurismoTest {
         Turismo.head("/a", a);
         Turismo.options("/a", a);
 
-        assertSame(a, Turismo.resolve("GET", "/a").action);
-        assertNotNull(Turismo.resolve("POST", "/a").action); // wrapped for 201
-        assertSame(a, Turismo.resolve("PUT", "/a").action);
-        assertSame(a, Turismo.resolve("DELETE", "/a").action);
-        assertSame(a, Turismo.resolve("PATCH", "/a").action);
-        assertSame(a, Turismo.resolve("HEAD", "/a").action);
-        assertSame(a, Turismo.resolve("OPTIONS", "/a").action);
+        assertSame(a, Turismo.app().resolve("GET", "/a").action);
+        assertSame(a, Turismo.app().resolve("POST", "/a").action);
+        assertSame(a, Turismo.app().resolve("PUT", "/a").action);
+        assertSame(a, Turismo.app().resolve("DELETE", "/a").action);
+        assertSame(a, Turismo.app().resolve("PATCH", "/a").action);
+        assertSame(a, Turismo.app().resolve("HEAD", "/a").action);
+        assertSame(a, Turismo.app().resolve("OPTIONS", "/a").action);
     }
 
     @Test
@@ -158,7 +155,7 @@ public class TurismoTest {
         Turismo.reset();
 
         // Should be not-found now
-        Turismo.RouteMatch match = Turismo.resolve("GET", "/hello");
+        App.RouteMatch match = Turismo.app().resolve("GET", "/hello");
         assertTrue(match.params.isEmpty());
     }
 
@@ -238,9 +235,11 @@ public class TurismoTest {
         Turismo.handle(ctx);
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testContextThrowsOutsideRequest() {
-        Turismo.context();
+        assertThrows(IllegalStateException.class, () -> {
+            Turismo.context();
+        });
     }
 
     // ---------------------------------------------------------------
@@ -267,19 +266,25 @@ public class TurismoTest {
         assertEquals("/new", ctx.responseHeaders.get("Location"));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testRedirectRejectsCR() {
-        Turismo.validateLocation("/bad\rlocation");
+        assertThrows(IllegalArgumentException.class, () -> {
+            Turismo.validateLocation("/bad\rlocation");
+        });
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testRedirectRejectsLF() {
-        Turismo.validateLocation("/bad\nlocation");
+        assertThrows(IllegalArgumentException.class, () -> {
+            Turismo.validateLocation("/bad\nlocation");
+        });
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testRedirectRejectsNull() {
-        Turismo.validateLocation(null);
+        assertThrows(IllegalArgumentException.class, () -> {
+            Turismo.validateLocation(null);
+        });
     }
 
     // ---------------------------------------------------------------
@@ -303,7 +308,7 @@ public class TurismoTest {
 
         Turismo.handle(ctx);
         assertEquals("Created!", ctx.printed.toString());
-        assertEquals(201, ctx.statusCode);
+        assertEquals(200, ctx.statusCode);
     }
 
     @Test
@@ -334,26 +339,26 @@ public class TurismoTest {
     }
 
     // ---------------------------------------------------------------
-    // Default POST status 201
+    // POST status
     // ---------------------------------------------------------------
 
     @Test
-    public void testPostDefaultStatus201() {
+    public void testPostDefaultStatusIs200() {
         MockContext ctx = new MockContext("POST", "/items");
-        Turismo.post("/items", () -> Turismo.print("created"));
-
-        Turismo.handle(ctx);
-        assertEquals(201, ctx.statusCode);
-        assertEquals("created", ctx.printed.toString());
-    }
-
-    @Test
-    public void testPostCanOverrideStatus() {
-        MockContext ctx = new MockContext("POST", "/items");
-        Turismo.post("/items", () -> { Turismo.status(200); Turismo.print("ok"); });
+        Turismo.post("/items", () -> Turismo.print("done"));
 
         Turismo.handle(ctx);
         assertEquals(200, ctx.statusCode);
+        assertEquals("done", ctx.printed.toString());
+    }
+
+    @Test
+    public void testPostCanSetCreated() {
+        MockContext ctx = new MockContext("POST", "/items");
+        Turismo.post("/items", () -> { Turismo.status(201); Turismo.print("ok"); });
+
+        Turismo.handle(ctx);
+        assertEquals(201, ctx.statusCode);
     }
 
     // ---------------------------------------------------------------
@@ -464,9 +469,11 @@ public class TurismoTest {
         assertEquals("application/json", ctx.responseHeaders.get("Content-Type"));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testToJsonUnsupportedType() {
-        Turismo.toJson(new Object());
+        assertThrows(IllegalArgumentException.class, () -> {
+            Turismo.toJson(new Object());
+        });
     }
 
     @Test
@@ -517,9 +524,11 @@ public class TurismoTest {
         assertTrue(result.isEmpty());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testPathPatternNullPath() {
-        new PathPattern(null);
+        assertThrows(IllegalArgumentException.class, () -> {
+            new PathPattern(null);
+        });
     }
 
     @Test
@@ -551,12 +560,12 @@ public class TurismoTest {
     }
 
     @Test
-    public void testControllerPostDefaultStatus201() {
+    public void testControllerPostDefaultStatusIs200() {
         MockContext ctx = new MockContext("POST", "/ctrl/items");
         Turismo.controller(new TestController());
 
         Turismo.handle(ctx);
-        assertEquals(201, ctx.statusCode);
+        assertEquals(200, ctx.statusCode);
         assertEquals("created", ctx.printed.toString());
     }
 
@@ -614,9 +623,11 @@ public class TurismoTest {
         }
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testControllerNoAnnotationsThrows() {
-        Turismo.controller(new Object());
+        assertThrows(IllegalArgumentException.class, () -> {
+            Turismo.controller(new Object());
+        });
     }
 
     // ---------------------------------------------------------------
@@ -628,8 +639,8 @@ public class TurismoTest {
         Runnable get = () -> {};
         Turismo.get("/hello", get);
         Turismo.get("/users/:id", get);
-        assertSame(get, Turismo.resolve("HEAD", "/hello").action);
-        assertSame(get, Turismo.resolve("HEAD", "/users/1").action);
+        assertSame(get, Turismo.app().resolve("HEAD", "/hello").action);
+        assertSame(get, Turismo.app().resolve("HEAD", "/users/1").action);
     }
 
     @Test
@@ -637,7 +648,7 @@ public class TurismoTest {
         Runnable head = () -> {};
         Turismo.get("/hello", () -> {});
         Turismo.head("/hello", head);
-        assertSame(head, Turismo.resolve("HEAD", "/hello").action);
+        assertSame(head, Turismo.app().resolve("HEAD", "/hello").action);
     }
 
     @Test
@@ -671,27 +682,27 @@ public class TurismoTest {
     @Test
     public void testEncodedSlashStaysInParam() {
         Turismo.get("/files/:name", () -> {});
-        Turismo.RouteMatch match =
-                Turismo.resolve("GET", "/files/a/b", "/files/a%2Fb");
+        App.RouteMatch match =
+                Turismo.app().resolve("GET", "/files/a/b", "/files/a%2Fb");
         assertEquals("a/b", match.params.get("name"));
     }
 
     @Test
     public void testRawPathSegmentsAreDecoded() {
         Turismo.get("/caf\u00e9/:name", () -> {});
-        Turismo.RouteMatch match = Turismo.resolve("GET",
+        App.RouteMatch match = Turismo.app().resolve("GET",
                 "/caf\u00e9/x y", "/caf%C3%A9/x%20y");
         assertEquals("x y", match.params.get("name"));
     }
 
     @Test
     public void testPercentDecode() {
-        assertEquals("a/b", Turismo.percentDecode("a%2Fb"));
-        assertEquals("caf\u00e9", Turismo.percentDecode("caf%C3%A9"));
-        assertEquals("a+b", Turismo.percentDecode("a+b"));
-        assertEquals("100%", Turismo.percentDecode("100%"));
-        assertEquals("%zz", Turismo.percentDecode("%zz"));
-        assertEquals("%4", Turismo.percentDecode("%4"));
+        assertEquals("a/b", App.percentDecode("a%2Fb"));
+        assertEquals("caf\u00e9", App.percentDecode("caf%C3%A9"));
+        assertEquals("a+b", App.percentDecode("a+b"));
+        assertEquals("100%", App.percentDecode("100%"));
+        assertEquals("%zz", App.percentDecode("%zz"));
+        assertEquals("%4", App.percentDecode("%4"));
     }
 
     @Test
@@ -701,7 +712,7 @@ public class TurismoTest {
             MockContext ctx = new MockContext("GET", "/admin/secret");
             ctx.rawPath = raw;
             Turismo.handle(ctx);
-            assertEquals(raw, 404, ctx.statusCode);
+            assertEquals(404, ctx.statusCode, raw);
         }
     }
 
@@ -798,9 +809,11 @@ public class TurismoTest {
         assertEquals("[[1],[2]]", Turismo.toJson(new int[][] {{1}, {2}}));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testDuplicateParamNameRejected() {
-        Turismo.get("/a/:id/b/:id", () -> {});
+        assertThrows(IllegalArgumentException.class, () -> {
+            Turismo.get("/a/:id/b/:id", () -> {});
+        });
     }
 
     // ---------------------------------------------------------------

@@ -1,11 +1,12 @@
 package io.github.ghosthack.turismo.util;
 
-import static org.junit.Assert.assertSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
 import java.io.InputStream;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import io.github.ghosthack.turismo.Routes;
 import io.github.ghosthack.turismo.servlet.TestRoutes;
@@ -60,8 +61,10 @@ public class ClassForNameTest {
         }
     }
 
-    @Test(expected = ClassForName.ClassForNameException.class)
+    @Test
     public void testWrongTypeIsWrapped() throws Exception {
-        ClassForName.createInstance("java.lang.String", Routes.class);
+        assertThrows(ClassForName.ClassForNameException.class, () -> {
+            ClassForName.createInstance("java.lang.String", Routes.class);
+        });
     }
 }
