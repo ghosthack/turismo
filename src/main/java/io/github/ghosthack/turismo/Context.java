@@ -113,4 +113,13 @@ public interface Context {
      * @return the response output stream
      */
     OutputStream output();
+
+    /**
+     * Discards the response headers and output written so far, so an
+     * error response can replace a partial one. Implementations that
+     * don't buffer the response can't take back what was sent; the
+     * default does nothing.
+     */
+    default void reset() {
+    }
 }

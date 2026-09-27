@@ -663,7 +663,7 @@ public class TurismoTest {
 
     @Test
     public void testFormsMapKeepsFirstValueAndSkipsEmptyPairs() {
-        Turismo.post("/f", () -> Turismo.print(Turismo.forms().toString()));
+        Turismo.post("/f", () -> Turismo.print(Turismo.formFields().toString()));
         MockContext ctx = new MockContext("POST", "/f").form("a=1&&b&a=2");
         Turismo.handle(ctx);
         assertEquals("{a=1, b=}", ctx.printed.toString());
@@ -683,7 +683,7 @@ public class TurismoTest {
     @Test
     public void testFormIgnoresOtherContentTypes() {
         Turismo.post("/f", () -> {
-            Turismo.print(Turismo.form("a") + " " + Turismo.forms().size()
+            Turismo.print(Turismo.form("a") + " " + Turismo.formFields().size()
                     + " ");
             try {
                 Turismo.print(new String(Turismo.body().readAllBytes(),
@@ -697,6 +697,94 @@ public class TurismoTest {
         ctx.requestBody = "a=1".getBytes(StandardCharsets.UTF_8);
         Turismo.handle(ctx);
         assertEquals("null 0 a=1", ctx.printed.toString());
+    }
+
+    @Test
+    public void testRequestErrorReplacesPartialResponse() {
+        App app = new App();
+        app.setMaxFormSize(3);
+        app.post("/f", () -> {
+            Turismo.header("X-Partial", "1");
+            Turismo.print("partial ");
+            Turismo.form("a");
+            Turismo.print("unreachable");
+        });
+        MockContext ctx = new MockContext("POST", "/f").form("a=123456");
+        app.handle(ctx);
+        assertEquals(413, ctx.statusCode);
+        assertEquals("Content Too Large", ctx.printed.toString());
+        assertNull(ctx.responseHeaders.get("X-Partial"));
+    }
+
+    @Test
+    public void testFormAfterRawBodyReadFailsLoudly() {
+        String[] seen = new String[2];
+        Turismo.post("/raw", () -> {
+            try {
+                seen[0] = new String(Turismo.context().body().readAllBytes(),
+                        StandardCharsets.UTF_8);
+            } catch (java.io.IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
+            IllegalStateException e = assertThrows(
+                    IllegalStateException.class, () -> Turismo.form("a"));
+            seen[1] = e.getMessage();
+        });
+        MockContext ctx = new MockContext("POST", "/raw").form("a=1");
+        ctx.singleUseBody = true;
+        Turismo.handle(ctx);
+        assertEquals("a=1", seen[0]);
+        assertTrue(seen[1].contains("already read"), seen[1]);
+
+        // Same through Turismo.body()
+        Turismo.post("/body", () -> {
+            try {
+                Turismo.body().readAllBytes();
+            } catch (java.io.IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
+            assertThrows(IllegalStateException.class,
+                    () -> Turismo.param("missing"));
+        });
+        MockContext ctx2 = new MockContext("POST", "/body").form("a=1");
+        ctx2.singleUseBody = true;
+        Turismo.handle(ctx2);
+    }
+
+    @Test
+    public void testRawBodyReadDoesNotAffectNonFormRequests() {
+        Turismo.post("/json", () -> {
+            try {
+                Turismo.context().body().readAllBytes();
+            } catch (java.io.IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
+            Turismo.print(String.valueOf(Turismo.param("q")));
+        });
+        MockContext ctx = new MockContext("POST", "/json");
+        ctx.requestHeaders.put("Content-Type", "application/json");
+        ctx.requestBody = "{}".getBytes(StandardCharsets.UTF_8);
+        ctx.singleUseBody = true;
+        Turismo.handle(ctx);
+        assertEquals("null", ctx.printed.toString());
+    }
+
+    @Test
+    public void testContextBodyReplaysAfterFormParsed() {
+        Turismo.post("/f", () -> {
+            Turismo.form("a");
+            try {
+                Turismo.print(new String(
+                        Turismo.context().body().readAllBytes(),
+                        StandardCharsets.UTF_8));
+            } catch (java.io.IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
+        });
+        MockContext ctx = new MockContext("POST", "/f").form("a=1&b=2");
+        ctx.singleUseBody = true;
+        Turismo.handle(ctx);
+        assertEquals("a=1&b=2", ctx.printed.toString());
     }
 
     @Test
@@ -1278,6 +1366,9 @@ public class TurismoTest {
             this.path = path;
         }
 
+        boolean singleUseBody;
+        private InputStream bodyStream;
+
         /** Sets a urlencoded form body with its Content-Type. */
         MockContext form(String body) {
             requestHeaders.put("Content-Type",
@@ -1291,7 +1382,21 @@ public class TurismoTest {
         @Override public String path() { return path; }
         @Override public String query(String name) { return queryParams.get(name); }
         @Override public String header(String name) { return requestHeaders.get(name); }
-        @Override public InputStream body() { return new ByteArrayInputStream(requestBody); }
+        @Override public InputStream body() {
+            if (!singleUseBody) {
+                return new ByteArrayInputStream(requestBody);
+            }
+            // Like a real request: one stream, consumed once
+            if (bodyStream == null) {
+                bodyStream = new ByteArrayInputStream(requestBody);
+            }
+            return bodyStream;
+        }
+        @Override public void reset() {
+            printed.setLength(0);
+            responseHeaders.clear();
+            outputStream.reset();
+        }
         @Override public void status(int code) { this.statusCode = code; }
         @Override public void header(String name, String value) { responseHeaders.put(name, value); }
         @Override public void print(String text) { printed.append(text); }

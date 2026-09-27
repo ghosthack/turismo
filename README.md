@@ -98,13 +98,15 @@ and query parameters:
 post("/login", () -> {
     String user = param("user");  // path, then query, then form field
     String pass = form("pass");   // form field only
-    Map<String, String> all = forms();
+    Map<String, String> all = formFields();
 });
 ```
 
 The body is read on first use and decoded with the request's charset
 (UTF-8 by default); if a name repeats, the first value wins. `body()` still
-returns the full body afterwards. Bodies over 2 MB get `413 Content Too
+returns the full body afterwards. The reverse order doesn't work: once a
+handler has taken the raw `body()` stream of a form request, `form()` and a
+`param()` that falls through to the form throw `IllegalStateException`. Bodies over 2 MB get `413 Content Too
 Large` (change the limit with `app().setMaxFormSize(bytes)`), and malformed
 ones `400 Bad Request`. Other content types are left alone: `form()` returns
 `null` and the body isn't read. For `multipart/form-data` (servlet

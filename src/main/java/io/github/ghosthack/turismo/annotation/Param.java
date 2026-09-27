@@ -24,7 +24,8 @@ import java.lang.annotation.Target;
 /**
  * Names the request parameter bound to a controller method argument.
  * The value is looked up like {@link io.github.ghosthack.turismo.Turismo#param(String)}:
- * path parameters first, then the query string.
+ * path parameters first, then the query string, then the fields of an
+ * {@code application/x-www-form-urlencoded} body.
  *
  * <pre>{@code
  * @GET("/items/:id")

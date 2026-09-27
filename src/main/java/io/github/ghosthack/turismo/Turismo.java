@@ -337,6 +337,9 @@ public final class Turismo {
      * @param name the field name
      * @return the value, or {@code null} if not present or the request
      *         body is not a form
+     * @throws IllegalStateException if the request has a form body but
+     *         the handler already took the raw body stream, which leaves
+     *         nothing to parse; read form fields before {@link #body()}
      */
     public static String form(String name) {
         return form().get(name);
@@ -349,7 +352,7 @@ public final class Turismo {
      *
      * @return the form fields, empty if the request body is not a form
      */
-    public static Map<String, String> forms() {
+    public static Map<String, String> formFields() {
         return form().fields();
     }
 
@@ -391,7 +394,9 @@ public final class Turismo {
     }
 
     /**
-     * Returns the request body as an input stream.
+     * Returns the request body as an input stream. If the form fields
+     * have already been read (see {@link #form(String)}), the body is
+     * replayed from memory.
      *
      * @return the request body
      */
@@ -760,9 +765,10 @@ public final class Turismo {
     static Object[] bind(Context ctx, Map<String, String> params,
             int maxFormSize) {
         Object[] previous = {CONTEXT.get(), PATH_PARAMS.get(), FORM.get()};
-        CONTEXT.set(ctx);
+        Form form = new Form(ctx, maxFormSize);
+        CONTEXT.set(form.context());
         PATH_PARAMS.set(params);
-        FORM.set(new Form(ctx, maxFormSize));
+        FORM.set(form);
         return previous;
     }
 
