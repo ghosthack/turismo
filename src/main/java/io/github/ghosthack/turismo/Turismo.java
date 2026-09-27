@@ -72,6 +72,7 @@ public final class Turismo {
     private static final ThreadLocal<Context> CONTEXT = new ThreadLocal<>();
     private static final ThreadLocal<Map<String, String>> PATH_PARAMS =
             new ThreadLocal<>();
+    private static final ThreadLocal<Form> FORM = new ThreadLocal<>();
 
     private static final App APP = new App();
 
@@ -307,8 +308,9 @@ public final class Turismo {
 
     /**
      * Returns a parameter value by name. Checks path parameters first
-     * (e.g. {@code :id} in a route pattern), then falls back to query
-     * string parameters.
+     * (e.g. {@code :id} in a route pattern), then query string
+     * parameters, then fields of an {@code application/x-www-form-urlencoded}
+     * request body (see {@link #form(String)}).
      *
      * @param name the parameter name
      * @return the value, or {@code null} if not found
@@ -321,7 +323,39 @@ public final class Turismo {
                 return value;
             }
         }
-        return context().query(name);
+        String value = context().query(name);
+        return value != null ? value : form(name);
+    }
+
+    /**
+     * Returns a field of an {@code application/x-www-form-urlencoded}
+     * request body, as sent by an HTML form. The body is read and parsed
+     * on first use (the raw body stays available through {@link #body()}).
+     * A body over the app's {@linkplain App#setMaxFormSize limit} is
+     * answered with {@code 413}, a malformed one with {@code 400}.
+     *
+     * @param name the field name
+     * @return the value, or {@code null} if not present or the request
+     *         body is not a form
+     */
+    public static String form(String name) {
+        return form().get(name);
+    }
+
+    /**
+     * Returns all fields of an {@code application/x-www-form-urlencoded}
+     * request body as an unmodifiable map, as described in
+     * {@link #form(String)}.
+     *
+     * @return the form fields, empty if the request body is not a form
+     */
+    public static Map<String, String> forms() {
+        return form().fields();
+    }
+
+    private static Form form() {
+        context(); // Throws if no request is bound; FORM is bound with it
+        return FORM.get();
     }
 
     /**
@@ -362,7 +396,8 @@ public final class Turismo {
      * @return the request body
      */
     public static InputStream body() {
-        return context().body();
+        Form form = FORM.get();
+        return form != null ? form.body() : context().body();
     }
 
     // ---------------------------------------------------------------
@@ -722,10 +757,12 @@ public final class Turismo {
      * Returns the previous binding, to be restored with {@link #restore},
      * so an app can dispatch to another from inside a handler.
      */
-    static Object[] bind(Context ctx, Map<String, String> params) {
-        Object[] previous = {CONTEXT.get(), PATH_PARAMS.get()};
+    static Object[] bind(Context ctx, Map<String, String> params,
+            int maxFormSize) {
+        Object[] previous = {CONTEXT.get(), PATH_PARAMS.get(), FORM.get()};
         CONTEXT.set(ctx);
         PATH_PARAMS.set(params);
+        FORM.set(new Form(ctx, maxFormSize));
         return previous;
     }
 
@@ -734,9 +771,11 @@ public final class Turismo {
         if (previous[0] == null) {
             CONTEXT.remove();
             PATH_PARAMS.remove();
+            FORM.remove();
         } else {
             CONTEXT.set((Context) previous[0]);
             PATH_PARAMS.set((Map<String, String>) previous[1]);
+            FORM.set((Form) previous[2]);
         }
     }
 

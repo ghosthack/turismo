@@ -385,6 +385,38 @@ public class ServerTest {
         }
     }
 
+    @Test
+    public void testFormPost() throws Exception {
+        Turismo.post("/login", () -> Turismo.print(
+                Turismo.param("user") + ":" + Turismo.form("pass")));
+        Server server = startServer();
+        try {
+            HttpResult result = postForm(
+                    "http://localhost:" + server.port() + "/login",
+                    "user=ana&pass=s%20cret");
+            assertEquals(200, result.status);
+            assertEquals("ana:s cret", result.body);
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test
+    public void testFormPostTooLarge() throws Exception {
+        Turismo.app().setMaxFormSize(4);
+        Turismo.post("/login", () -> Turismo.print("got " + Turismo.form("a")));
+        Server server = startServer();
+        try {
+            HttpResult result = postForm(
+                    "http://localhost:" + server.port() + "/login",
+                    "a=123456789");
+            assertEquals(413, result.status);
+            assertEquals("Content Too Large", result.body);
+        } finally {
+            server.stop();
+        }
+    }
+
     // ---------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------
@@ -413,6 +445,25 @@ public class ServerTest {
                             StandardCharsets.UTF_8)
                     : "";
         }
+        conn.disconnect();
+        return new HttpResult(status, body);
+    }
+
+    private HttpResult postForm(String urlStr, String form) throws Exception {
+        HttpURLConnection conn = (HttpURLConnection)
+                URI.create(urlStr).toURL().openConnection();
+        conn.setRequestMethod("POST");
+        conn.setDoOutput(true);
+        conn.setRequestProperty("Content-Type",
+                "application/x-www-form-urlencoded");
+        try (OutputStream os = conn.getOutputStream()) {
+            os.write(form.getBytes(StandardCharsets.UTF_8));
+        }
+        int status = conn.getResponseCode();
+        java.io.InputStream in = status < 400
+                ? conn.getInputStream() : conn.getErrorStream();
+        String body = in != null
+                ? new String(in.readAllBytes(), StandardCharsets.UTF_8) : "";
         conn.disconnect();
         return new HttpResult(status, body);
     }

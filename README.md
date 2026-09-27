@@ -88,6 +88,28 @@ get("/search", () -> {
 });
 ```
 
+### Form bodies
+
+Fields of an `application/x-www-form-urlencoded` body (what an HTML form
+posts) are read with `form()`, and `param()` falls back to them after path
+and query parameters:
+
+```java
+post("/login", () -> {
+    String user = param("user");  // path, then query, then form field
+    String pass = form("pass");   // form field only
+    Map<String, String> all = forms();
+});
+```
+
+The body is read on first use and decoded with the request's charset
+(UTF-8 by default); if a name repeats, the first value wins. `body()` still
+returns the full body afterwards. Bodies over 2 MB get `413 Content Too
+Large` (change the limit with `app().setMaxFormSize(bytes)`), and malformed
+ones `400 Bad Request`. Other content types are left alone: `form()` returns
+`null` and the body isn't read. For `multipart/form-data` (servlet
+deployment), see [Multipart file uploads](#multipart-file-uploads).
+
 ## HTTP methods
 
 All standard methods: `get`, `post`, `put`, `delete`, `patch`, `head`, `options`.
@@ -209,8 +231,8 @@ annotated override in a subclass replaces the superclass's route.
 ### Method arguments
 
 Instead of calling `param()`, a route method can take the parameters as
-arguments. Each is looked up like `param()` (path parameter, then query
-string) and converted to the argument type:
+arguments. Each is looked up like `param()` (path parameter, query string,
+then [form body](#form-bodies)) and converted to the argument type:
 
 ```java
 @GET("/items/:id")
@@ -221,6 +243,11 @@ void getItem(@Param("id") int id) {
 @GET("/search")                          // /search?q=shoes&page=2
 void search(@Param("q") String q, @Param("page") Integer page) {
     print(q + " page " + (page != null ? page : 1));
+}
+
+@POST("/signup")                         // form: email=a%40b.c&age=30
+void signup(@Param("email") String email, @Param("age") int age) {
+    print(email + " is " + age);
 }
 ```
 
@@ -443,7 +470,8 @@ a `Content-Type` is reported as `application/octet-stream`.
   - Requests without `Content-Length` are accepted.
 
 New in 5.0: `App` instances ([Multiple apps](#multiple-apps)), controller
-method arguments ([Method arguments](#method-arguments)), graceful
+method arguments ([Method arguments](#method-arguments)), form bodies
+([Form bodies](#form-bodies)), graceful
 `stop(Duration)`, logging of handler errors, and JSON support for records,
 enums, `Character` and all array types.
 
