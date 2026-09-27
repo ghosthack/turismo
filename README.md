@@ -10,17 +10,17 @@ A lightweight Sinatra/Express-style Java web framework.
 <dependency>
     <groupId>io.github.ghosthack</groupId>
     <artifactId>turismo</artifactId>
-    <version>4.0.0</version>
+    <version>5.0.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'io.github.ghosthack:turismo:4.0.0'
+implementation 'io.github.ghosthack:turismo:5.0.0'
 ```
 
-Requires Java 21+. (3.x supports Java 17.)
+Requires Java 21+. (3.x supports Java 17.) See [Upgrading to 5.0](#upgrading-to-50) for breaking changes.
 
 > **Note:** Versions 1.x were published under `com.ghosthack:turismo`. The groupId changed to
 > `io.github.ghosthack` starting with 2.0.0.
@@ -108,7 +108,8 @@ delete("/users/:id", () -> print("Deleted ", param("id")));
 ```
 
 > **Upgrading from 4.x:** POST routes used to default to `201`. Add
-> `status(201)` to handlers that relied on it.
+> `status(201)` to handlers that relied on it. See
+> [Upgrading to 5.0](#upgrading-to-50).
 
 ## Response helpers
 
@@ -386,13 +387,44 @@ malformed ones; `MultipartFilter` answers those with `413` and `400`. Text is
 decoded with the request's charset, defaulting to UTF-8. A file part without
 a `Content-Type` is reported as `application/octet-stream`.
 
+## Upgrading to 5.0
+
+5.0 changes these defaults and behaviors from 4.x:
+
+- **POST status**: `post()` and `@POST` routes respond `200` unless the
+  handler sets a status. Add `status(201)` where you relied on the old
+  default.
+- **Servlet routes answer 405**: with `RoutesMap`/`RoutesList`, a request
+  whose path only matches routes for other methods gets
+  `405 Method Not Allowed` with an `Allow` header, instead of 404 or the
+  default route. HEAD requests are served by GET routes.
+- **Encoded slashes**: `/admin%2Fsecret` no longer matches an exact
+  `/admin/secret` route (it could be used to get past path-based access
+  rules in a proxy).
+- **Route validation**: `route()`, `get()`, ... reject a null method,
+  path or action, and paths that don't start with `/`; `notFound(null)` is
+  rejected too.
+- **Multipart**:
+  - Text defaults to UTF-8 instead of ISO-8859-1 when the request has no
+    charset.
+  - `MultipartFilter` answers malformed bodies with `400` and oversized ones
+    with `413` instead of throwing `ServletException`.
+  - `wrapAndParse` throws `ContentTooLargeException` (a `ParseException`)
+    for oversized bodies, and `ParseException` for a missing boundary or
+    unsupported charset.
+  - Requests without `Content-Length` are accepted.
+
+New in 5.0: `App` instances ([Multiple apps](#multiple-apps)), graceful
+`stop(Duration)`, logging of handler errors, and JSON support for records,
+enums, `Character` and all array types.
+
 ## Releasing
 
 1. Set the release version in `pom.xml` (remove `-SNAPSHOT`) and merge it to `master` via PR
 2. Tag the merged commit on `master` and push the tag:
    ```sh
-   git tag v4.0.0
-   git push origin v4.0.0
+   git tag v5.0.0
+   git push origin v5.0.0
    ```
 3. The Release workflow checks that the tag matches the `pom.xml` version and is on
    `master`, deploys to Maven Central, and creates the GitHub release
