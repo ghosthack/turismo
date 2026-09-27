@@ -1124,7 +1124,8 @@ public class TurismoTest {
 
     @Test
     public void testControllerBindsParamByJavaName() {
-        // Relies on -parameters, enabled in pom.xml
+        // Names come from -parameters (pom.xml); ParameterNamesTest covers
+        // classes compiled without it
         Turismo.controller(new ArgsController());
         MockContext ctx = new MockContext("GET", "/args/named/abc");
         Turismo.handle(ctx);
