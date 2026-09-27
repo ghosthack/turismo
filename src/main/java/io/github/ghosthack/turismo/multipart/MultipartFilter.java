@@ -8,6 +8,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Parses submitted multipart form data and creates a new request object.
@@ -44,14 +45,20 @@ import jakarta.servlet.http.HttpServletRequest;
  * </pre>
  * </blockquote>
  *
+ * <p>Text is decoded with the request's charset, or with the
+ * {@code charset-name} init parameter (default UTF-8) when the request does
+ * not declare one. A malformed body gets {@code 400 Bad Request} and one
+ * larger than {@link MultipartParser#getMaxContentSize()} gets
+ * {@code 413 Content Too Large}.</p>
+ *
  * <p>Configuration details:</p>
  * <pre>
  *  &lt;filter&gt;
  *      &lt;filter-name&gt;multipart-filter&lt;/filter-name&gt;
- *      &lt;filter-class&gt;multipart.Filter&lt;/filter-class&gt;
+ *      &lt;filter-class&gt;io.github.ghosthack.turismo.multipart.MultipartFilter&lt;/filter-class&gt;
  *      &lt;init-param&gt;
  *          &lt;param-name&gt;charset-name&lt;/param-name&gt;
- *          &lt;param-value&gt;ISO-8859-1&lt;/param-value&gt;
+ *          &lt;param-value&gt;UTF-8&lt;/param-value&gt;
  *      &lt;/init-param&gt;
  *  &lt;/filter&gt;
  *  &lt;filter-mapping&gt;
@@ -67,7 +74,7 @@ public class MultipartFilter implements jakarta.servlet.Filter {
     }
 
     private static final String CHARSET_NAME_PARAMETER = "charset-name";
-    private static final String DEFAULT_CHARSET_NAME = "ISO-8859-1";
+    private static final String DEFAULT_CHARSET_NAME = "UTF-8";
 
     private String charsetName = DEFAULT_CHARSET_NAME;
 
@@ -86,8 +93,14 @@ public class MultipartFilter implements jakarta.servlet.Filter {
             try {
               multipartRequest = MultipartRequest.wrapAndParse(
                       (HttpServletRequest) request, charsetName);
+            } catch (ContentTooLargeException e) {
+                ((HttpServletResponse) response).sendError(
+                        HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
+                return;
             } catch (ParseException e) {
-                throw new ServletException(e);
+                ((HttpServletResponse) response).sendError(
+                        HttpServletResponse.SC_BAD_REQUEST);
+                return;
             }
             chain.doFilter(multipartRequest, response);
         } else {

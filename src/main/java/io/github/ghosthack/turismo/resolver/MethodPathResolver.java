@@ -16,6 +16,13 @@
 
 package io.github.ghosthack.turismo.resolver;
 
+import java.io.IOException;
+import java.util.Collections;
+import java.util.Set;
+import java.util.TreeSet;
+
+import jakarta.servlet.http.HttpServletResponse;
+
 import io.github.ghosthack.turismo.Resolver;
 import io.github.ghosthack.turismo.action.ActionException;
 import io.github.ghosthack.turismo.servlet.Env;
@@ -48,6 +55,70 @@ public abstract class MethodPathResolver implements Resolver {
      * @return the matching action, or {@code null}
      */
     protected abstract Runnable resolve(String method, String path);
+
+    /**
+     * Finds the action registered for exactly this method and path,
+     * without any fallback. Subclasses that override this and
+     * {@link #allowedMethods(String)} can implement
+     * {@link #resolve(String, String)} with {@link #dispatch}.
+     *
+     * @param method the HTTP method
+     * @param path   the request path
+     * @return the matching action, or {@code null}
+     */
+    protected Runnable find(String method, String path) {
+        return null;
+    }
+
+    /**
+     * Returns the methods that have a route matching the path.
+     *
+     * @param path the request path
+     * @return the matching methods; empty if none
+     */
+    protected Set<String> allowedMethods(String path) {
+        return Collections.emptySet();
+    }
+
+    /**
+     * Resolves a request using {@link #find}: a HEAD request with no
+     * HEAD route is served by the GET route, a path that only matches
+     * routes for other methods gets {@code 405 Method Not Allowed}, and
+     * anything else gets {@code fallback}.
+     *
+     * @param method   the HTTP method
+     * @param path     the request path
+     * @param fallback the action to use when nothing matches
+     * @return the action to run, or {@code fallback} (possibly null)
+     */
+    protected final Runnable dispatch(String method, String path,
+            Runnable fallback) {
+        Runnable route = find(method, path);
+        if (route == null && "HEAD".equals(method)) {
+            route = find("GET", path);
+        }
+        if (route != null) {
+            return route;
+        }
+        Set<String> allowed = new TreeSet<>(allowedMethods(path));
+        if (!allowed.isEmpty()) {
+            if (allowed.contains("GET")) {
+                allowed.add("HEAD");
+            }
+            return () -> methodNotAllowed(allowed);
+        }
+        return fallback;
+    }
+
+    private static void methodNotAllowed(Set<String> allowed) {
+        HttpServletResponse res = Env.res();
+        res.setHeader("Allow", String.join(", ", allowed));
+        try {
+            res.sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
+        } catch (IOException e) {
+            throw new ActionException(e);
+        }
+    }
 
     private String extractPath() throws ActionException {
         String path = Env.req().getPathInfo();

@@ -150,12 +150,13 @@ public class RoutesListTest {
     }
 
     @Test
-    public void testWrongMethod() {
+    public void testWrongMethod() throws Exception {
         HttpServletRequest req = getRequestMock("PUT", "/submit");
         HttpServletResponse res = getResponseMock();
         Env.create(req, res, null);
         routes.getResolver().resolve().run();
-        verify(res).setStatus(HttpServletResponse.SC_NOT_FOUND);
+        verify(res).setHeader("Allow", "POST");
+        verify(res).sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
     }
 
     @Test

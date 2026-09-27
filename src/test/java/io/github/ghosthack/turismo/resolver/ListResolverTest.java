@@ -6,6 +6,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.mockito.Mockito.verify;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -154,7 +155,7 @@ public class ListResolverTest {
     }
 
     @Test
-    public void testMethodMismatch() {
+    public void testMethodMismatch() throws Exception {
         resolver.route("GET", "/path", new Runnable() {
             @Override
             public void run() { }
@@ -164,7 +165,35 @@ public class ListResolverTest {
         HttpServletResponse res = getResponseMock();
         Env.create(req, res, null);
 
-        assertNull(resolver.resolve());
+        resolver.resolve().run();
+        verify(res).setHeader("Allow", "GET, HEAD");
+        verify(res).sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
+    }
+
+    @Test
+    public void testHeadServedByGetRoute() {
+        final Runnable action = () -> { };
+        resolver.route("GET", "/users/:id", action);
+
+        HttpServletRequest req = getRequestMock("HEAD", "/users/7");
+        HttpServletResponse res = getResponseMock();
+        Env.create(req, res, null);
+
+        assertSame(action, resolver.resolve());
+        assertEquals("7", Env.params("id"));
+    }
+
+    @Test
+    public void testHeadRoutePreferredOverGet() {
+        final Runnable get = () -> { };
+        final Runnable head = () -> { };
+        resolver.route("GET", "/x", get);
+        resolver.route("HEAD", "/x", head);
+
+        HttpServletRequest req = getRequestMock("HEAD", "/x");
+        Env.create(req, getResponseMock(), null);
+
+        assertSame(head, resolver.resolve());
     }
 
     @Test

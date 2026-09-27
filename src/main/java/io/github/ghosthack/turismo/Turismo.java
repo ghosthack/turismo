@@ -20,10 +20,13 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Array;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.RecordComponent;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -212,8 +215,12 @@ public final class Turismo {
      * Sets the handler for requests that match no registered route.
      *
      * @param action the not-found action
+     * @throws IllegalArgumentException if action is null
      */
     public static void notFound(Runnable action) {
+        if (action == null) {
+            throw new IllegalArgumentException("action must not be null");
+        }
         NOT_FOUND = action;
     }
 
@@ -225,8 +232,20 @@ public final class Turismo {
      * @param method the HTTP method (e.g. "GET")
      * @param path   the URL path pattern
      * @param action the action to execute
+     * @throws IllegalArgumentException if any argument is null or the
+     *         path does not start with {@code /}
      */
     public static void route(String method, String path, Runnable action) {
+        if (method == null || method.isEmpty()) {
+            throw new IllegalArgumentException("method must not be empty");
+        }
+        if (path == null || !path.startsWith("/")) {
+            throw new IllegalArgumentException(
+                    "path must start with '/': " + path);
+        }
+        if (action == null) {
+            throw new IllegalArgumentException("action must not be null");
+        }
         if (path.contains(":") || path.contains("*")) {
             PATTERNS.add(new PatternRoute(method, path, action));
         } else {
@@ -519,8 +538,9 @@ public final class Turismo {
     /**
      * Sets the Content-Type to {@code application/json} and writes
      * the given object as JSON to the response body. Supports
-     * {@link Map}, {@link Iterable}, arrays, {@link String},
-     * {@link Number}, {@link Boolean}, and {@code null}. Non-finite
+     * {@link Map}, {@link Iterable}, arrays, records, {@link String},
+     * {@link Character}, enums, {@link Number}, {@link Boolean}, and
+     * {@code null}. Non-finite
      * numbers (NaN, Infinity) are written as {@code null}.
      *
      * @param obj the object to serialize
@@ -532,9 +552,10 @@ public final class Turismo {
 
     /**
      * Serializes an object to a JSON string. Supports {@link Map},
-     * {@link Iterable}, arrays, {@link String}, {@link Number},
-     * {@link Boolean}, and {@code null}. Non-finite numbers (NaN,
-     * Infinity) are written as {@code null}.
+     * {@link Iterable}, arrays, records (as objects keyed by component
+     * name), {@link String}, {@link Character}, enums (by name),
+     * {@link Number}, {@link Boolean}, and {@code null}. Non-finite
+     * numbers (NaN, Infinity) are written as {@code null}.
      *
      * @param obj the object to serialize
      * @return the JSON string
@@ -544,8 +565,11 @@ public final class Turismo {
         if (obj == null) {
             return "null";
         }
-        if (obj instanceof String) {
-            return jsonString((String) obj);
+        if (obj instanceof String || obj instanceof Character) {
+            return jsonString(obj.toString());
+        }
+        if (obj instanceof Enum<?> e) {
+            return jsonString(e.name());
         }
         if (obj instanceof Double d) {
             return jsonNumber(d);
@@ -564,6 +588,9 @@ public final class Turismo {
         }
         if (obj.getClass().isArray()) {
             return jsonArray(obj);
+        }
+        if (obj instanceof Record r) {
+            return jsonRecord(r);
         }
         throw new IllegalArgumentException(
                 "Unsupported type: " + obj.getClass().getName());
@@ -635,63 +662,45 @@ public final class Turismo {
     }
 
     private static String jsonArray(Object arr) {
-        if (arr instanceof Object[]) {
-            Object[] a = (Object[]) arr;
-            StringBuilder sb = new StringBuilder();
-            sb.append('[');
-            for (int i = 0; i < a.length; i++) {
-                if (i > 0) sb.append(',');
-                sb.append(toJson(a[i]));
-            }
-            sb.append(']');
-            return sb.toString();
+        // Array.get boxes primitive elements, so every array type goes
+        // through the same element handling as boxed values
+        int length = Array.getLength(arr);
+        StringBuilder sb = new StringBuilder();
+        sb.append('[');
+        for (int i = 0; i < length; i++) {
+            if (i > 0) sb.append(',');
+            sb.append(toJson(Array.get(arr, i)));
         }
-        if (arr instanceof int[]) {
-            int[] a = (int[]) arr;
-            StringBuilder sb = new StringBuilder();
-            sb.append('[');
-            for (int i = 0; i < a.length; i++) {
-                if (i > 0) sb.append(',');
-                sb.append(a[i]);
+        sb.append(']');
+        return sb.toString();
+    }
+
+    private static String jsonRecord(Record r) {
+        RecordComponent[] components = r.getClass().getRecordComponents();
+        StringBuilder sb = new StringBuilder();
+        sb.append('{');
+        for (int i = 0; i < components.length; i++) {
+            if (i > 0) sb.append(',');
+            Method accessor = components[i].getAccessor();
+            Object value;
+            try {
+                accessor.setAccessible(true);
+                value = accessor.invoke(r);
+            } catch (InvocationTargetException e) {
+                throw new IllegalArgumentException(
+                        "Failed to read record component "
+                        + components[i].getName(), e.getCause());
+            } catch (ReflectiveOperationException | RuntimeException e) {
+                throw new IllegalArgumentException(
+                        "Cannot access record component "
+                        + components[i].getName(), e);
             }
-            sb.append(']');
-            return sb.toString();
+            sb.append(jsonString(components[i].getName()));
+            sb.append(':');
+            sb.append(toJson(value));
         }
-        if (arr instanceof long[]) {
-            long[] a = (long[]) arr;
-            StringBuilder sb = new StringBuilder();
-            sb.append('[');
-            for (int i = 0; i < a.length; i++) {
-                if (i > 0) sb.append(',');
-                sb.append(a[i]);
-            }
-            sb.append(']');
-            return sb.toString();
-        }
-        if (arr instanceof double[]) {
-            double[] a = (double[]) arr;
-            StringBuilder sb = new StringBuilder();
-            sb.append('[');
-            for (int i = 0; i < a.length; i++) {
-                if (i > 0) sb.append(',');
-                sb.append(jsonNumber(a[i]));
-            }
-            sb.append(']');
-            return sb.toString();
-        }
-        if (arr instanceof boolean[]) {
-            boolean[] a = (boolean[]) arr;
-            StringBuilder sb = new StringBuilder();
-            sb.append('[');
-            for (int i = 0; i < a.length; i++) {
-                if (i > 0) sb.append(',');
-                sb.append(a[i]);
-            }
-            sb.append(']');
-            return sb.toString();
-        }
-        throw new IllegalArgumentException(
-                "Unsupported array type: " + arr.getClass().getName());
+        sb.append('}');
+        return sb.toString();
     }
 
     /**
@@ -771,7 +780,25 @@ public final class Turismo {
     }
 
     /**
-     * Stops the embedded HTTP server, if one is running.
+     * Stops the embedded HTTP server gracefully, if one is running:
+     * new connections are refused and requests in progress get up to
+     * {@code grace} to complete before being interrupted.
+     *
+     * @param grace how long to wait for requests in progress
+     * @throws IllegalArgumentException if grace is null or negative
+     */
+    public static synchronized void stop(Duration grace) {
+        Server s = server;
+        if (s != null) {
+            s.stop(grace);
+            server = null;
+        }
+    }
+
+    /**
+     * Stops the embedded HTTP server immediately, if one is running.
+     * Requests still in progress are interrupted; use
+     * {@link #stop(Duration)} to let them finish.
      */
     public static synchronized void stop() {
         Server s = server;
@@ -850,14 +877,18 @@ public final class Turismo {
      */
     static RouteMatch resolve(String method, String path, String rawPath) {
         String[] segments = segments(path, rawPath);
-        RouteMatch match = find(method, path, segments);
+        // An encoded slash is part of a segment, not a separator, so the
+        // decoded path must not be used to look up an exact route: that
+        // would let /admin%2Fsecret reach the /admin/secret route
+        String exactPath = hasEncodedSlash(rawPath) ? null : path;
+        RouteMatch match = find(method, exactPath, segments);
         if (match == null && "HEAD".equals(method)) {
-            match = find("GET", path, segments);
+            match = find("GET", exactPath, segments);
         }
         if (match != null) {
             return match;
         }
-        Set<String> allowed = allowedMethods(path, segments);
+        Set<String> allowed = allowedMethods(exactPath, segments);
         if (!allowed.isEmpty()) {
             return new RouteMatch(() -> methodNotAllowed(allowed),
                     Collections.emptyMap());
@@ -917,6 +948,21 @@ public final class Turismo {
         status(405);
         header("Allow", String.join(", ", allowed));
         print("Method Not Allowed");
+    }
+
+    private static boolean hasEncodedSlash(String rawPath) {
+        if (rawPath == null) {
+            return false;
+        }
+        for (int i = rawPath.indexOf('%'); i >= 0 && i + 2 < rawPath.length();
+                i = rawPath.indexOf('%', i + 1)) {
+            if (rawPath.charAt(i + 1) == '2'
+                    && (rawPath.charAt(i + 2) == 'F'
+                        || rawPath.charAt(i + 2) == 'f')) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String[] segments(String path, String rawPath) {

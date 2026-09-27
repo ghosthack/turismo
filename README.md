@@ -68,7 +68,10 @@ get("/users/:userId/posts/:postId", () -> {
 ```
 
 Parameter values are percent-decoded, and an encoded slash stays inside its
-segment: `/files/a%2Fb` matches `/files/:name` with `name` = `a/b`.
+segment: `/files/a%2Fb` matches `/files/:name` with `name` = `a/b`. For the
+same reason `/admin%2Fsecret` does not match an exact `/admin/secret` route.
+
+Paths must start with `/`.
 
 ### Wildcards
 
@@ -117,6 +120,7 @@ print("Hello ", name, "!");  // varargs — avoids concatenation
 // JSON response (built-in serializer, no dependencies)
 json(Map.of("ok", true, "count", 42));
 json(List.of("a", "b", "c"));
+// Also: records (as objects), enums (by name), Character, all array types.
 // NaN and Infinity are written as null, as in JavaScript
 String s = toJson(Map.of("key", "value")); // serialize without writing
 
@@ -206,11 +210,23 @@ The embedded server handles each request on its own virtual thread, so
 handlers can block (database calls, outbound HTTP, `Thread.sleep`) without
 holding up other requests.
 
+## Stopping and errors
+
+```java
+stop();                       // immediate: requests in progress are interrupted
+stop(Duration.ofSeconds(10)); // graceful: in-flight requests get up to 10s
+```
+
+An exception thrown by a handler results in a `500 Internal Server Error` and
+is logged through `System.Logger` (by default `java.util.logging`).
+
 ## Servlet deployment
 
 turismo also supports deployment in any Jakarta EE 10 servlet container
 (Tomcat 10.1+, Jetty 12+, etc.) via the `Servlet` class and
-`RoutesMap`/`RoutesList` API.
+`RoutesMap`/`RoutesList` API. As with the embedded server, HEAD requests are
+served by GET routes and wrong-method requests get `405` with an `Allow`
+header.
 
 ### RoutesMap — exact match (O(1) lookup)
 
@@ -330,6 +346,14 @@ post("/upload", new Action() {
     }
 });
 ```
+
+Uploads are limited to 10 MB by default (`MultipartParser.setMaxContentSize`);
+memory is used as the body arrives, not reserved from the declared
+`Content-Length`, and chunked uploads are accepted. `wrapAndParse` throws
+`ContentTooLargeException` for bodies over the limit and `ParseException` for
+malformed ones; `MultipartFilter` answers those with `413` and `400`. Text is
+decoded with the request's charset, defaulting to UTF-8. A file part without
+a `Content-Type` is reported as `application/octet-stream`.
 
 ## Releasing
 

@@ -694,6 +694,110 @@ public class TurismoTest {
         assertEquals("%4", Turismo.percentDecode("%4"));
     }
 
+    @Test
+    public void testEncodedSlashDoesNotMatchExactRoute() {
+        Turismo.get("/admin/secret", () -> {});
+        for (String raw : new String[] {"/admin%2Fsecret", "/admin%2fsecret"}) {
+            MockContext ctx = new MockContext("GET", "/admin/secret");
+            ctx.rawPath = raw;
+            Turismo.handle(ctx);
+            assertEquals(raw, 404, ctx.statusCode);
+        }
+    }
+
+    @Test
+    public void testEncodedSlashDoesNotReportAllowedMethods() {
+        Turismo.post("/admin/secret", () -> {});
+        MockContext ctx = new MockContext("GET", "/admin/secret");
+        ctx.rawPath = "/admin%2Fsecret";
+        Turismo.handle(ctx);
+        assertEquals(404, ctx.statusCode);
+        assertNull(ctx.responseHeaders.get("Allow"));
+    }
+
+    @Test
+    public void testExactRouteStillMatchesOtherEncodings() {
+        Turismo.get("/caf\u00e9", () -> Turismo.print("ok"));
+        MockContext ctx = new MockContext("GET", "/caf\u00e9");
+        ctx.rawPath = "/caf%C3%A9";
+        Turismo.handle(ctx);
+        assertEquals("ok", ctx.printed.toString());
+    }
+
+    @Test
+    public void testRouteValidation() {
+        Runnable noop = () -> {};
+        assertRejected(() -> Turismo.route(null, "/a", noop));
+        assertRejected(() -> Turismo.route("", "/a", noop));
+        assertRejected(() -> Turismo.route("GET", null, noop));
+        assertRejected(() -> Turismo.route("GET", "a", noop));
+        assertRejected(() -> Turismo.route("GET", "", noop));
+        assertRejected(() -> Turismo.route("GET", "/a", null));
+        assertRejected(() -> Turismo.get("/a", (Runnable) null));
+        assertRejected(() -> Turismo.notFound(null));
+    }
+
+    private static void assertRejected(Runnable registration) {
+        try {
+            registration.run();
+            fail("Expected IllegalArgumentException");
+        } catch (IllegalArgumentException expected) {
+            // good
+        }
+    }
+
+    @Test
+    public void testPatternMatchResultIsUnmodifiable() {
+        PathPattern pattern = new PathPattern("/users/:id");
+        Map<String, String> params = pattern.match("/users/1".split("/"));
+        assertEquals("1", params.get("id"));
+        try {
+            params.put("id", "2");
+            fail("Expected UnsupportedOperationException");
+        } catch (UnsupportedOperationException expected) {
+            // good
+        }
+        try {
+            pattern.paramEntries().clear();
+            fail("Expected UnsupportedOperationException");
+        } catch (UnsupportedOperationException expected) {
+            // good
+        }
+        assertEquals("1", pattern.match("/users/1".split("/")).get("id"));
+    }
+
+    enum Color { RED }
+
+    record Point(int x, String label, List<Integer> tags) { }
+
+    record Empty() { }
+
+    @Test
+    public void testToJsonCharacterEnumAndRecord() {
+        assertEquals("\"c\"", Turismo.toJson('c'));
+        assertEquals("\"\\\"\"", Turismo.toJson('"'));
+        assertEquals("\"RED\"", Turismo.toJson(Color.RED));
+        assertEquals("{\"x\":1,\"label\":\"p\",\"tags\":[2,3]}",
+                Turismo.toJson(new Point(1, "p", List.of(2, 3))));
+        assertEquals("{}", Turismo.toJson(new Empty()));
+    }
+
+    @Test
+    public void testToJsonAllPrimitiveArrays() {
+        assertEquals("[1,2]", Turismo.toJson(new byte[] {1, 2}));
+        assertEquals("[1,2]", Turismo.toJson(new short[] {1, 2}));
+        assertEquals("[1,2]", Turismo.toJson(new int[] {1, 2}));
+        assertEquals("[1,2]", Turismo.toJson(new long[] {1, 2}));
+        assertEquals("[1.5,null]",
+                Turismo.toJson(new float[] {1.5f, Float.NaN}));
+        assertEquals("[1.5,null]",
+                Turismo.toJson(new double[] {1.5, Double.POSITIVE_INFINITY}));
+        assertEquals("[true,false]",
+                Turismo.toJson(new boolean[] {true, false}));
+        assertEquals("[\"a\",\"b\"]", Turismo.toJson(new char[] {'a', 'b'}));
+        assertEquals("[[1],[2]]", Turismo.toJson(new int[][] {{1}, {2}}));
+    }
+
     @Test(expected = IllegalArgumentException.class)
     public void testDuplicateParamNameRejected() {
         Turismo.get("/a/:id/b/:id", () -> {});
@@ -880,6 +984,7 @@ public class TurismoTest {
         final StringBuilder printed = new StringBuilder();
         final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         int statusCode = 200;
+        String rawPath;
 
         MockContext(String method, String path) {
             this.method = method;
@@ -887,6 +992,7 @@ public class TurismoTest {
         }
 
         @Override public String method() { return method; }
+        @Override public String rawPath() { return rawPath; }
         @Override public String path() { return path; }
         @Override public String query(String name) { return queryParams.get(name); }
         @Override public String header(String name) { return requestHeaders.get(name); }

@@ -18,8 +18,10 @@ package io.github.ghosthack.turismo.http;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -54,6 +56,9 @@ import io.github.ghosthack.turismo.Turismo;
  */
 public class Server {
 
+    private static final System.Logger LOG =
+            System.getLogger(Server.class.getName());
+
     private final HttpServer server;
     private final ExecutorService executor;
 
@@ -80,11 +85,43 @@ public class Server {
     }
 
     /**
-     * Stops the server immediately, closing all connections.
+     * Stops the server immediately, closing all connections. Requests
+     * still in progress are interrupted.
      */
     public void stop() {
         server.stop(0);
         executor.shutdownNow();
+    }
+
+    /**
+     * Stops the server gracefully: new connections are refused at once,
+     * requests in progress get up to {@code grace} to complete, and any
+     * still running after that are interrupted.
+     *
+     * @param grace how long to wait for requests in progress
+     * @throws IllegalArgumentException if grace is null or negative
+     */
+    public void stop(Duration grace) {
+        if (grace == null || grace.isNegative()) {
+            throw new IllegalArgumentException(
+                    "grace must be zero or positive");
+        }
+        long deadline = System.nanoTime() + grace.toNanos();
+        // HttpServer.stop takes whole seconds; round up so it never cuts
+        // the grace period short, the executor wait below enforces it
+        long seconds = grace.toSeconds() + (grace.toNanosPart() > 0 ? 1 : 0);
+        server.stop((int) Math.min(seconds, Integer.MAX_VALUE));
+        executor.shutdown();
+        try {
+            long remaining = deadline - System.nanoTime();
+            if (remaining > 0) {
+                executor.awaitTermination(remaining, TimeUnit.NANOSECONDS);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
     /**
@@ -104,6 +141,9 @@ public class Server {
                 Turismo.handle(ctx);
             } catch (Throwable t) {
                 // Catch Errors too, otherwise the client gets no response
+                LOG.log(System.Logger.Level.ERROR,
+                        "Unhandled error in " + ctx.method() + " "
+                        + ctx.path(), t);
                 ctx.reset();
                 ctx.status(500);
                 ctx.print("Internal Server Error");
