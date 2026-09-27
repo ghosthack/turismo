@@ -65,6 +65,28 @@ public class EnvTest {
     }
 
     @Test
+    public void testRestorePutsBackPreviousEnv() {
+        HttpServletRequest outer = getRequestMock("GET", "/outer");
+        Env.create(outer, getResponseMock(), null);
+        Env previous = Env.get();
+
+        Env.create(getRequestMock("GET", "/inner"), getResponseMock(), null);
+        Env.restore(previous);
+
+        assertSame(previous, Env.get());
+        assertSame(outer, Env.req());
+    }
+
+    @Test
+    public void testRestoreNullRemovesEnv() {
+        Env.create(getRequestMock("GET", "/"), getResponseMock(), null);
+
+        Env.restore(null);
+
+        assertNull(Env.get());
+    }
+
+    @Test
     public void testResourceParams() {
         HttpServletRequest req = getRequestMock("GET", "/");
         HttpServletResponse res = getResponseMock();

@@ -36,11 +36,23 @@ public class Alias {
 
     /**
      * Forwards the request to the given target path.
+     * <p>
+     * The target is a path inside the web application, starting with
+     * {@code /} and relative to the context root. It can name any
+     * resource, including ones under {@code /WEB-INF}, so don't build it
+     * from request input: a user-controlled target can expose resources
+     * that are not meant to be served directly.
      *
-     * @param target the path to forward to
-     * @throws ActionException if the context or dispatcher is unavailable, or forwarding fails
+     * @param target the context-relative path to forward to
+     * @throws ActionException if the target is not a path starting with
+     *         {@code /}, the context or dispatcher is unavailable, or
+     *         forwarding fails
      */
     public void forward(final String target) {
+        if (target == null || !target.startsWith("/")) {
+            throw new ActionException(
+                    "Forward target must start with '/': " + target);
+        }
         final ServletContext ctx = Env.ctx();
         if (ctx == null) {
             throw new ActionException("ServletContext is not available");

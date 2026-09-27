@@ -58,7 +58,23 @@ public class Env {
     public static void destroy() {
         locals.remove();
     }
-    
+
+    /**
+     * Puts back an Env saved with {@link #get()} before a nested
+     * {@link #create}, such as the one done by a request forwarded back
+     * into the servlet. Passing {@code null} removes the Env, like
+     * {@link #destroy()}.
+     *
+     * @param previous the Env to restore, or {@code null}
+     */
+    public static void restore(Env previous) {
+        if (previous == null) {
+            locals.remove();
+        } else {
+            locals.set(previous);
+        }
+    }
+
     /**
      * Returns the current request.
      *
