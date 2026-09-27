@@ -351,7 +351,7 @@ public class ServerTest {
                     .toURL().openConnection();
             conn.setRequestMethod("DELETE");
             assertEquals(405, conn.getResponseCode());
-            assertEquals("GET, HEAD", conn.getHeaderField("Allow"));
+            assertEquals("GET, HEAD, OPTIONS", conn.getHeaderField("Allow"));
             conn.disconnect();
         } finally {
             server.stop();

@@ -43,6 +43,8 @@ final class ParameterNames {
     /**
      * Returns the parameter names of a method, or {@code null} if its
      * class file can't be found or has no local variable names for it.
+     * An abstract method has no code and so never has local variable
+     * names; pass its implementation instead.
      */
     static String[] of(Method method) {
         Class<?> c = method.getDeclaringClass();

@@ -22,8 +22,9 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -196,7 +197,9 @@ public class App {
     }
 
     /**
-     * Registers an OPTIONS route.
+     * Registers an OPTIONS route. Without one, OPTIONS requests for a
+     * path that has routes are answered with {@code 204 No Content} and
+     * an {@code Allow} header listing its methods.
      *
      * @param path   the URL path pattern
      * @param action the action to execute
@@ -240,6 +243,9 @@ public class App {
      * Registers a route for a specific HTTP method and path pattern.
      * Paths containing {@code :} or {@code *} are treated as pattern
      * routes; all others are exact-match routes resolved in O(1).
+     * Registering the same method and path again replaces the earlier
+     * route (a replaced pattern route keeps its place in the matching
+     * order).
      *
      * @param method the HTTP method (e.g. "GET")
      * @param path   the URL path pattern
@@ -248,6 +254,12 @@ public class App {
      *         path does not start with {@code /}
      */
     public void route(String method, String path, Runnable action) {
+        register(newRoute(method, path, action));
+    }
+
+    /** Validates a route; for a pattern route, also compiles the path. */
+    private static Route newRoute(String method, String path,
+            Runnable action) {
         if (method == null || method.isEmpty()) {
             throw new IllegalArgumentException("method must not be empty");
         }
@@ -258,11 +270,28 @@ public class App {
         if (action == null) {
             throw new IllegalArgumentException("action must not be null");
         }
-        if (path.contains(":") || path.contains("*")) {
-            patterns.add(new PatternRoute(method, path, action));
-        } else {
-            exact.computeIfAbsent(method, k -> new ConcurrentHashMap<>())
-                 .put(path, action);
+        PatternRoute pattern = path.contains(":") || path.contains("*")
+                ? new PatternRoute(method, path, action) : null;
+        return new Route(method, path, action, pattern);
+    }
+
+    private void register(Route r) {
+        if (r.pattern() == null) {
+            exact.computeIfAbsent(r.method(), k -> new ConcurrentHashMap<>())
+                 .put(r.path(), r.action());
+            return;
+        }
+        // Writers are serialized so that two registrations of the same
+        // pattern can't both append; readers iterate a snapshot
+        synchronized (patterns) {
+            for (int i = 0; i < patterns.size(); i++) {
+                PatternRoute pr = patterns.get(i);
+                if (pr.method.equals(r.method()) && pr.path.equals(r.path())) {
+                    patterns.set(i, r.pattern());
+                    return;
+                }
+            }
+            patterns.add(r.pattern());
         }
     }
 
@@ -276,7 +305,9 @@ public class App {
      * {@link PUT @PUT}, {@link DELETE @DELETE}, or {@link PATCH @PATCH},
      * and registers each as a route. Annotated methods declared in
      * superclasses are included; an annotated override in a subclass
-     * replaces the superclass's route.
+     * replaces the superclass's route (an overload, with other parameter
+     * types, does not). Either every route of the controller is
+     * registered or, if one of them is rejected, none is.
      *
      * <p>Route method arguments are bound from the request: path, query
      * and form parameters by name (see {@link io.github.ghosthack.turismo.annotation.Param
@@ -311,19 +342,17 @@ public class App {
      *         be bound
      */
     public void controller(Object instance) {
-        int count = 0;
-        // Names of registered overridable methods: a subclass's annotated
-        // override replaces the superclass's route instead of adding to it.
-        Set<String> registered = new HashSet<>();
+        // Build (and so validate) every route before registering any, so
+        // that a rejected method doesn't leave the others registered
+        List<Route> routes = new ArrayList<>();
+        // Annotated methods of subclasses: an annotated override replaces
+        // the superclass's route instead of adding to it
+        List<Method> registered = new ArrayList<>();
         for (Class<?> c = instance.getClass(); c != null && c != Object.class;
                 c = c.getSuperclass()) {
             for (Method m : c.getDeclaredMethods()) {
-                if (m.isSynthetic() || m.isBridge()) {
-                    continue;
-                }
-                boolean overridable = !Modifier.isPrivate(m.getModifiers())
-                        && !Modifier.isStatic(m.getModifiers());
-                if (overridable && registered.contains(m.getName())) {
+                if (m.isSynthetic() || m.isBridge()
+                        || isOverridden(m, registered)) {
                     continue;
                 }
                 boolean annotated = false;
@@ -332,21 +361,57 @@ public class App {
                     if (httpMethod == null) {
                         continue;
                     }
-                    route(httpMethod, routePath(a),
-                            new RouteMethod(instance, m));
+                    routes.add(newRoute(httpMethod, routePath(a),
+                            new RouteMethod(instance, m)));
                     annotated = true;
-                    count++;
                 }
-                if (annotated && overridable) {
-                    registered.add(m.getName());
+                if (annotated) {
+                    registered.add(m);
                 }
             }
         }
-        if (count == 0) {
+        if (routes.isEmpty()) {
             throw new IllegalArgumentException(
                     "No annotated routes found in "
                     + instance.getClass().getName());
         }
+        for (Route r : routes) {
+            register(r);
+        }
+    }
+
+    /**
+     * Whether a superclass method is overridden by one of the given
+     * subclass methods: same name and parameter types, and visible to the
+     * subclass (private and static methods are never overridden, and a
+     * package-private one only from its own package).
+     */
+    private static boolean isOverridden(Method m, List<Method> subclassMethods) {
+        int mod = m.getModifiers();
+        if (Modifier.isPrivate(mod) || Modifier.isStatic(mod)) {
+            return false;
+        }
+        boolean packagePrivate = !Modifier.isPublic(mod)
+                && !Modifier.isProtected(mod);
+        for (Method sub : subclassMethods) {
+            if (Modifier.isPrivate(sub.getModifiers())
+                    || Modifier.isStatic(sub.getModifiers())
+                    || !sub.getName().equals(m.getName())
+                    || !Arrays.equals(sub.getParameterTypes(),
+                            m.getParameterTypes())) {
+                continue;
+            }
+            if (!packagePrivate || samePackage(sub.getDeclaringClass(),
+                    m.getDeclaringClass())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean samePackage(Class<?> a, Class<?> b) {
+        return a.getClassLoader() == b.getClassLoader()
+                && a.getPackageName().equals(b.getPackageName());
     }
 
     private static String httpMethod(Annotation a) {
@@ -518,8 +583,10 @@ public class App {
         }
         Set<String> allowed = allowedMethods(exactPath, segments);
         if (!allowed.isEmpty()) {
-            return new RouteMatch(() -> methodNotAllowed(allowed),
-                    Collections.emptyMap());
+            Runnable action = "OPTIONS".equals(method)
+                    ? () -> options(allowed)
+                    : () -> methodNotAllowed(allowed);
+            return new RouteMatch(action, Collections.emptyMap());
         }
         return new RouteMatch(notFound, Collections.emptyMap());
     }
@@ -549,7 +616,10 @@ public class App {
         return null;
     }
 
-    /** Methods with a route for this path, for the 405 Allow header. */
+    /**
+     * Methods with a route for this path, for the Allow header of a 405
+     * or an automatic OPTIONS response; empty if there are none.
+     */
     private Set<String> allowedMethods(String path, String[] segments) {
         Set<String> allowed = new TreeSet<>();
         if (path != null) {
@@ -566,10 +636,20 @@ public class App {
                 }
             }
         }
+        if (allowed.isEmpty()) {
+            return allowed;
+        }
         if (allowed.contains("GET")) {
             allowed.add("HEAD");
         }
+        // Answered automatically when there is no OPTIONS route
+        allowed.add("OPTIONS");
         return allowed;
+    }
+
+    private static void options(Set<String> allowed) {
+        Turismo.status(204);
+        Turismo.header("Allow", String.join(", ", allowed));
     }
 
     private static void methodNotAllowed(Set<String> allowed) {
@@ -593,11 +673,15 @@ public class App {
         return false;
     }
 
+    /**
+     * Path segments, keeping empty ones: a trailing or doubled slash is
+     * significant, as it is for exact routes.
+     */
     private static String[] segments(String path, String rawPath) {
         if (rawPath == null) {
-            return path != null ? path.split("/") : null;
+            return path != null ? PathPattern.split(path) : null;
         }
-        String[] segments = rawPath.split("/");
+        String[] segments = PathPattern.split(rawPath);
         for (int i = 0; i < segments.length; i++) {
             segments[i] = percentDecode(segments[i]);
         }
@@ -658,13 +742,20 @@ public class App {
      */
     static class PatternRoute {
         final String method;
+        final String path;
         final PathPattern pattern;
         final Runnable action;
 
         PatternRoute(String method, String path, Runnable action) {
             this.method = method;
+            this.path = path;
             this.pattern = new PathPattern(path);
             this.action = action;
         }
+    }
+
+    /** A validated route, not yet registered. */
+    private record Route(String method, String path, Runnable action,
+            PatternRoute pattern) {
     }
 }

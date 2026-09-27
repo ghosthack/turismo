@@ -26,17 +26,26 @@ import java.util.Set;
  * A compiled URL path pattern that supports named parameters ({@code :name})
  * and wildcards ({@code *}).
  *
+ * <p>Every segment is significant, including empty ones: a trailing
+ * slash or a doubled slash adds an (empty) segment, so {@code /users/:id}
+ * matches {@code /users/42} but not {@code /users/42/} or
+ * {@code /users//42}. A named parameter or wildcard matches exactly one
+ * non-empty segment. Split request paths with {@link #split(String)} (or
+ * {@code path.split("/", -1)}), which keeps trailing empty segments.
+ *
  * <p>Instances are immutable and thread-safe. Typical usage:
  *
  * <pre>{@code
  * PathPattern pattern = new PathPattern("/users/:id/posts/:postId");
- * Map<String, String> params = pattern.match("/users/42/posts/7".split("/"));
+ * Map<String, String> params = pattern.match(PathPattern.split("/users/42/posts/7"));
  * // params = {id=42, postId=7}
  * }</pre>
  *
  * @see Turismo
  */
 public final class PathPattern {
+
+    private static final String[] ROOT = {"", ""};
 
     private final String[] parts;
     private final Map<String, Integer> paramNames;
@@ -55,7 +64,7 @@ public final class PathPattern {
         if (path == null) {
             throw new IllegalArgumentException("path must not be null");
         }
-        this.parts = path.split("/");
+        this.parts = split(path);
         Map<String, Integer> names = new HashMap<>();
         Set<Integer> params = new HashSet<>();
         Set<Integer> wildcards = new HashSet<>();
@@ -77,20 +86,41 @@ public final class PathPattern {
     }
 
     /**
+     * Splits a path into segments on {@code /}, keeping empty segments
+     * (including trailing ones), so that {@code /a/} gives
+     * {@code ["", "a", ""]} rather than {@code ["", "a"]}.
+     *
+     * @param path the path
+     * @return the path segments
+     */
+    public static String[] split(String path) {
+        return path.split("/", -1);
+    }
+
+    /**
      * Attempts to match the given request path segments against this
      * pattern. Named parameter values are extracted into the returned map.
      *
-     * @param requestParts the request path split by {@code /}
+     * @param requestParts the request path split by {@code /}, keeping
+     *        empty segments (see {@link #split(String)})
      * @return an unmodifiable map of parameter names to values on match,
      *         or {@code null} if the path does not match
      */
     public Map<String, String> match(String[] requestParts) {
+        if (requestParts.length == 0) {
+            // "/".split("/") drops both empty segments: it is the root
+            requestParts = ROOT;
+        }
         if (requestParts.length != parts.length) {
             return null;
         }
         for (int i = 0; i < parts.length; i++) {
             if (wildcardPositions.contains(i)
                     || paramPositions.contains(i)) {
+                // A parameter or wildcard stands for one non-empty segment
+                if (requestParts[i].isEmpty()) {
+                    return null;
+                }
                 continue;
             }
             if (!parts[i].equals(requestParts[i])) {
