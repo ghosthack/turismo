@@ -5,7 +5,7 @@
 
   <groupId>io.github.ghosthack</groupId>
   <artifactId>turismo</artifactId>
-  <version>4.0.0</version>
+  <version>5.0.0</version>
   <packaging>jar</packaging>
 
   <name>turismo</name>
