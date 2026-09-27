@@ -169,10 +169,66 @@ String s = toJson(Map.of("key", "value")); // serialize without writing
 redirect("/new-location");       // 302
 movedPermanently("/new-url");    // 301
 redirect(307, "/temporary");     // custom code
+redirectLocal(param("next"));    // 302, only to a path on this site
 
 // 404
 notFound();
 ```
+
+The embedded server accepts status codes 200-599; others throw
+`IllegalArgumentException`. HEAD requests get the `Content-Length` their GET
+would have, without the body.
+
+### Redirects and open redirects
+
+`redirect()` rejects control characters (CR/LF header injection, TAB) but
+otherwise goes wherever it is told. Never pass it a target from the request:
+`redirect(param("next"))` lets anyone craft a link to your site that sends
+users to `https://evil.com` or `//evil.com`. Use `redirectLocal()` instead,
+which accepts only a path on the same site (a single leading `/`; not
+`//host`, `/\host`, a scheme or control characters) and throws
+`IllegalArgumentException` otherwise. Catch it to fall back to a default:
+
+```java
+post("/login", () -> {
+    // ... authenticate ...
+    try {
+        redirectLocal(303, param("next"));
+    } catch (IllegalArgumentException e) {
+        redirect(303, "/");
+    }
+});
+```
+
+`Validation.isLocalPath(String)` performs the same check without redirecting.
+
+### Streaming large responses
+
+The embedded server buffers each response in memory so it can send
+`Content-Length`, and so an error can still become a clean 500. For large
+downloads or incremental output, call `stream()`: it sends the status and
+headers at once and returns a stream that writes straight to the client with
+chunked transfer encoding.
+
+```java
+get("/export.csv", () -> {
+    type("text/csv");                 // status and headers first
+    try (OutputStream out = stream()) {
+        for (Row row : rows()) {
+            out.write(row.toCsv());   // print() and output() also stream now
+        }
+    } catch (IOException e) {
+        throw new UncheckedIOException(e);
+    }
+});
+```
+
+After `stream()`, `status()` and `header()` throw `IllegalStateException`. An
+exception thrown after streaming has started can't be turned into a 500: it is
+logged and the response ends, so the client may receive a truncated body.
+`stream()` is only available on the embedded server; with another transport
+(a custom `Context` passed to `App.handle`) it throws
+`UnsupportedOperationException`.
 
 ## Custom not-found handler
 
@@ -335,6 +391,34 @@ admin.start(9090);
 The embedded server handles each request on its own virtual thread, so
 handlers can block (database calls, outbound HTTP, `Thread.sleep`) without
 holding up other requests.
+
+## Timeouts
+
+turismo sets no timeouts, and by default the JDK server lets a client take
+forever to send its request or read the response, so slow clients can hold
+connections open indefinitely. The JDK server reads its limits from system
+properties once per JVM (they apply to every `HttpServer` in the process), so
+turismo leaves them to you. Set them on the command line when exposing the
+server directly:
+
+```sh
+java -Dsun.net.httpserver.maxReqTime=30 \
+     -Dsun.net.httpserver.maxRspTime=120 \
+     -Dsun.net.httpserver.idleInterval=30 \
+     -Djdk.httpserver.maxConnections=1000 \
+     -jar app.jar
+```
+
+| Property | Unit | Default | Meaning |
+|---|---|---|---|
+| `sun.net.httpserver.maxReqTime` | seconds | none | time to receive a request |
+| `sun.net.httpserver.maxRspTime` | seconds | none | time to send a response; raise it for large or [streamed](#streaming-large-responses) downloads |
+| `sun.net.httpserver.idleInterval` | seconds | 30 | how long an idle keep-alive connection stays open |
+| `jdk.httpserver.maxConnections` | count | unlimited | concurrent connections |
+
+Set them before the first server starts (setting them later with
+`System.setProperty` has no effect). Behind a reverse proxy (nginx, a load
+balancer), the proxy's own timeouts usually cover this.
 
 ## Stopping and errors
 
@@ -547,8 +631,15 @@ enums, `Character` and all array types.
    git push origin v5.0.0
    ```
 3. The Release workflow checks that the tag matches the `pom.xml` version and is on
-   `master`, deploys to Maven Central, and creates the GitHub release
+   `master`, uploads the signed artifacts to Maven Central, and creates a
+   **draft** GitHub release
 4. Publish the deployment at https://central.sonatype.com/publishing/deployments
+5. Once the artifacts are live on Central, publish the draft release on GitHub
+
+The workflow uses the `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`,
+`GPG_PRIVATE_KEY` and `GPG_PASSPHRASE` repository secrets; the passphrase
+reaches `maven-gpg-plugin` through the `MAVEN_GPG_PASSPHRASE` environment
+variable.
 
 ## License
 
