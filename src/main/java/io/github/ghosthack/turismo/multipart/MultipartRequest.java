@@ -5,14 +5,30 @@ import jakarta.servlet.http.HttpServletRequestWrapper;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Wrapper that stores multipart form parameters.
- * 
+ *
+ * <p>The parameter methods merge the wrapped request's parameters (usually
+ * the query string) with the text fields of the body, query values first.
+ * Uploaded files are kept apart from text fields and are available through
+ * {@link #getFile(String)} and {@link #getFiles(String)}.</p>
+ *
+ * <p>For compatibility, a name that has files but no text values reports
+ * the first file's {@code [contentType, fileName]} as its parameter values,
+ * and the first file's bytes are also set as a {@code byte[]} request
+ * attribute under the field name.</p>
+ *
+ * <p>File names are client-supplied and untrusted; see {@link FilePart}.</p>
  */
 public class MultipartRequest extends HttpServletRequestWrapper implements
         Parametrizable {
@@ -29,7 +45,8 @@ public class MultipartRequest extends HttpServletRequestWrapper implements
 
     private static final String BOUNDARY_HEAD = "--";
 
-    private final Map<String, String[]> parameterMap = new HashMap<>();
+    private final Map<String, List<String>> fields = new LinkedHashMap<>();
+    private final Map<String, List<FilePart>> files = new LinkedHashMap<>();
     private String boundary;
 
     /**
@@ -82,51 +99,134 @@ public class MultipartRequest extends HttpServletRequestWrapper implements
     }
 
     /**
+     * Returns the wrapped request's parameters followed by the multipart
+     * text fields; see the class description for file fields.
+     *
      * @see jakarta.servlet.ServletRequest#getParameterMap()
-     * @return an unmodifiable view of the parameter map
+     * @return an unmodifiable map of the merged parameters
      */
     @Override
     public Map<String, String[]> getParameterMap() {
-        return Collections.unmodifiableMap(parameterMap);
+        final Map<String, String[]> map = new LinkedHashMap<>();
+        for (String name : parameterNames()) {
+            map.put(name, getParameterValues(name));
+        }
+        return Collections.unmodifiableMap(map);
     }
 
     /** @see jakarta.servlet.ServletRequest#getParameter(java.lang.String) */
     @Override
     public String getParameter(String name) {
         final String[] values = getParameterValues(name);
-        return (values == null) ? null : values[0];
+        return (values == null || values.length == 0) ? null : values[0];
     }
 
     /** @see jakarta.servlet.ServletRequest#getParameterNames() */
     @Override
     public Enumeration<String> getParameterNames() {
-        return Collections.enumeration(parameterMap.keySet());
+        return Collections.enumeration(parameterNames());
     }
 
-    /** @see jakarta.servlet.ServletRequest#getParameterValues(java.lang.String) */
+    /**
+     * Returns the wrapped request's values for {@code name} followed by the
+     * multipart text values. When there are none and {@code name} is a file
+     * field, returns the first file's {@code [contentType, fileName]}.
+     *
+     * @see jakarta.servlet.ServletRequest#getParameterValues(java.lang.String)
+     */
     @Override
     public String[] getParameterValues(String name) {
-        return parameterMap.get(name);
+        final String[] query = super.getParameterValues(name);
+        final List<String> body = fields.get(name);
+        if (body == null) {
+            if (query != null)
+                return query;
+            final FilePart file = getFile(name);
+            return file == null ? null
+                    : new String[] { file.contentType(), file.fileName() };
+        }
+        final int offset = query == null ? 0 : query.length;
+        final String[] values = new String[offset + body.size()];
+        if (query != null)
+            System.arraycopy(query, 0, values, 0, offset);
+        for (int i = 0; i < body.size(); i++)
+            values[offset + i] = body.get(i);
+        return values;
+    }
+
+    private Set<String> parameterNames() {
+        final Set<String> names = new LinkedHashSet<>();
+        final Enumeration<String> query = super.getParameterNames();
+        if (query != null) {
+            while (query.hasMoreElements())
+                names.add(query.nextElement());
+        }
+        names.addAll(fields.keySet());
+        names.addAll(files.keySet());
+        return names;
+    }
+
+    /**
+     * Returns the first file uploaded under {@code name}.
+     *
+     * @param name the form field name
+     * @return the file, or null if none was uploaded under that name
+     */
+    public FilePart getFile(String name) {
+        final List<FilePart> list = files.get(name);
+        return list == null ? null : list.get(0);
+    }
+
+    /**
+     * Returns all files uploaded under {@code name}, in body order.
+     *
+     * @param name the form field name
+     * @return an unmodifiable list, empty if none was uploaded
+     */
+    public List<FilePart> getFiles(String name) {
+        final List<FilePart> list = files.get(name);
+        return list == null ? List.of() : Collections.unmodifiableList(list);
+    }
+
+    /**
+     * Returns the names of the fields that received at least one file.
+     *
+     * @return an unmodifiable set of field names, in body order
+     */
+    public Set<String> getFileNames() {
+        return Collections.unmodifiableSet(files.keySet());
     }
 
     /** @see Parametrizable#addParameter(String, String) */
     @Override
     public void addParameter(String name, String value) {
-        String[] prev = parameterMap.put(name, new String[] { value });
-        if (prev != null) {
-            int length = prev.length;
-            length++;
-            final String[] values = new String[length];
-            System.arraycopy(prev, 0, values, 0, prev.length);
-            values[prev.length] = value;
-            parameterMap.put(name, values);
-        }
+        fields.computeIfAbsent(name, k -> new ArrayList<>(1)).add(value);
     }
 
-    /** @see Parametrizable#addParameter(String, String[]) */
+    /**
+     * Replaces the multipart text values of {@code name}.
+     *
+     * @see Parametrizable#addParameter(String, String[])
+     */
     @Override
     public void addParameter(String name, String[] value) {
-        parameterMap.put(name, value);
+        fields.put(name, new ArrayList<>(Arrays.asList(value)));
+    }
+
+    /**
+     * Adds an uploaded file. The first file of each name is also set as a
+     * {@code byte[]} request attribute under that name.
+     *
+     * @see Parametrizable#addFile(String, String, String, byte[])
+     */
+    @Override
+    public void addFile(String name, String contentType, String fileName,
+            byte[] content) {
+        final List<FilePart> list = files.computeIfAbsent(name,
+                k -> new ArrayList<>(1));
+        list.add(new FilePart(contentType, fileName, content));
+        if (list.size() == 1)
+            setAttribute(name, content);
     }
 
     /**

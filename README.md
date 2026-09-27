@@ -479,7 +479,28 @@ memory is used as the body arrives, not reserved from the declared
 `ContentTooLargeException` for bodies over the limit and `ParseException` for
 malformed ones; `MultipartFilter` answers those with `413` and `400`. Text is
 decoded with the request's charset, defaulting to UTF-8. A file part without
-a `Content-Type` is reported as `application/octet-stream`.
+a `Content-Type` is reported as `application/octet-stream`. Bodies with more
+than 1000 parts are rejected like oversized ones
+(`MultipartParser.setMaxParts`).
+
+`getParameterValues(name)` and the other parameter methods return the query
+string values first, then the body's text fields, so `/upload?id=5` keeps
+`id`. Files are kept apart from text fields. The `[contentType, fileName]`
+array and `byte[]` attribute above describe the first file of a field (the
+array is only reported when the name has no query or text values); use
+`getFile` and `getFiles` for everything, including several files under one
+name:
+
+```java
+for (FilePart file : multipart.getFiles("attachments")) {
+    save(file.fileName(), file.contentType(), file.content());
+}
+```
+
+`fileName` is exactly what the client sent: it may contain `/`, `\` or `..`,
+so never use it as a path without sanitizing it. Backslashes are kept
+literally, and `%22`, `%0D` and `%0A` are decoded to `"`, CR and LF, as
+browsers encode them.
 
 ## Upgrading to 5.0
 

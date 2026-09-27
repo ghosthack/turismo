@@ -1,6 +1,7 @@
 package io.github.ghosthack.turismo.multipart;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -31,6 +32,7 @@ public class MultipartParserTest {
     @AfterEach
     public void tearDown() {
         MultipartParser.setMaxContentSize(MultipartParser.DEFAULT_MAX_CONTENT_SIZE);
+        MultipartParser.setMaxParts(MultipartParser.DEFAULT_MAX_PARTS);
     }
 
     /** Collects what the parser reports. */
@@ -138,10 +140,58 @@ public class MultipartParserTest {
     @Test
     public void testQuotedParamsWithSemicolonsAndEscapes() {
         Map<String, String> params = MultipartParser.parseParams(
-                "form-data; name=\"a;b\"; filename=\"q\\\"uote.txt\"; x=plain");
+                "form-data; name=\"a;b\"; filename=\"q%22uote%0d%0A.txt\"; x=plain");
         assertEquals("a;b", params.get("name"));
-        assertEquals("q\"uote.txt", params.get("filename"));
+        assertEquals("q\"uote\r\n.txt", params.get("filename"));
         assertEquals("plain", params.get("x"));
+    }
+
+    @Test
+    public void testBackslashInFileNameIsLiteral() {
+        Map<String, String> params = MultipartParser.parseParams(
+                "form-data; name=\"f\"; filename=\"a\\b.txt\"");
+        assertEquals("a\\b.txt", params.get("filename"));
+        // Other percent sequences and paths are passed through untouched
+        params = MultipartParser.parseParams(
+                "form-data; name=\"f\"; filename=\"../x%41%2\\\"");
+        assertEquals("../x%41%2\\", params.get("filename"));
+    }
+
+    @Test
+    public void testTooManyPartsRejected() throws Exception {
+        MultipartParser.setMaxParts(2);
+        String two = "--XyZ\r\n"
+                + "Content-Disposition: form-data; name=\"a\"\r\n\r\n1\r\n"
+                + "--XyZ\r\n"
+                + "Content-Disposition: form-data; name=\"a\"\r\n\r\n2\r\n";
+        assertEquals(List.of("1", "2"), parse(two + "--XyZ--").fields.get("a"));
+        assertThrows(ContentTooLargeException.class, () -> parse(two
+                + "--XyZ\r\n"
+                + "Content-Disposition: form-data; name=\"a\"\r\n\r\n3\r\n"
+                + "--XyZ--"));
+    }
+
+    @Test
+    public void testManyRepeatedFieldsParseInLinearTime() throws Exception {
+        final int n = 200_000;
+        MultipartParser.setMaxParts(n);
+        MultipartParser.setMaxContentSize(32 * 1024 * 1024);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < n; i++) {
+            sb.append("--XyZ\r\nContent-Disposition: form-data; name=\"a\"\r\n\r\nx\r\n");
+        }
+        byte[] body = sb.append("--XyZ--").toString()
+                .getBytes(StandardCharsets.US_ASCII);
+        MultipartRequest mr = assertTimeoutPreemptively(
+                java.time.Duration.ofSeconds(10), () -> {
+                    MultipartRequest r = new MultipartRequest(request(
+                            "multipart/form-data; boundary=XyZ", body,
+                            body.length));
+                    new MultipartParser(new ByteArrayInputStream(body),
+                            "--XyZ", r, "UTF-8", body.length).parse();
+                    return r;
+                });
+        assertEquals(n, mr.getParameterValues("a").length);
     }
 
     @Test
@@ -319,5 +369,137 @@ public class MultipartParserTest {
         new MultipartFilter().doFilter(req, res,
                 (r, s) -> seen[0] = r.getParameter("city"));
         assertEquals("São Paulo", seen[0]);
+    }
+
+    @Test
+    public void testFilterSends413ForTooManyParts() throws Exception {
+        MultipartParser.setMaxParts(1);
+        byte[] body = ("--XyZ\r\n"
+                + "Content-Disposition: form-data; name=\"a\"\r\n\r\n1\r\n"
+                + "--XyZ\r\n"
+                + "Content-Disposition: form-data; name=\"b\"\r\n\r\n2\r\n"
+                + "--XyZ--").getBytes(StandardCharsets.US_ASCII);
+        HttpServletRequest req = request(
+                "multipart/form-data; boundary=XyZ", body, body.length);
+        HttpServletResponse res = mock(HttpServletResponse.class);
+        FilterChain chain = mock(FilterChain.class);
+        new MultipartFilter().doFilter(req, res, chain);
+        verify(res).sendError(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
+        verify(chain, never()).doFilter(any(), any());
+    }
+
+    @Test
+    public void testFilterSends413ForBodyOverLimitWithUnknownLength()
+            throws Exception {
+        MultipartParser.setMaxContentSize(20);
+        HttpServletRequest req = request("multipart/form-data; boundary=XyZ",
+                new byte[21], -1);
+        HttpServletResponse res = mock(HttpServletResponse.class);
+        FilterChain chain = mock(FilterChain.class);
+        new MultipartFilter().doFilter(req, res, chain);
+        verify(res).sendError(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
+        verify(chain, never()).doFilter(any(), any());
+    }
+
+    @Test
+    public void testFilterSends400ForUnterminatedPart() throws Exception {
+        byte[] body = ("--XyZ\r\n"
+                + "Content-Disposition: form-data; name=\"a\"\r\n\r\nno end")
+                .getBytes(StandardCharsets.US_ASCII);
+        HttpServletRequest req = request(
+                "multipart/form-data; boundary=XyZ", body, body.length);
+        HttpServletResponse res = mock(HttpServletResponse.class);
+        FilterChain chain = mock(FilterChain.class);
+        new MultipartFilter().doFilter(req, res, chain);
+        verify(res).sendError(HttpServletResponse.SC_BAD_REQUEST);
+        verify(chain, never()).doFilter(any(), any());
+    }
+
+    private static final String FILES_BODY = "--XyZ\r\n"
+            + "Content-Disposition: form-data; name=\"doc\"; filename=\"a.txt\"\r\n"
+            + "Content-Type: text/plain\r\n"
+            + "\r\n"
+            + "AAA\r\n"
+            + "--XyZ\r\n"
+            + "Content-Disposition: form-data; name=\"doc\"; filename=\"b.bin\"\r\n"
+            + "\r\n"
+            + "BB\r\n"
+            + "--XyZ\r\n"
+            + "Content-Disposition: form-data; name=\"doc\"\r\n"
+            + "\r\n"
+            + "note\r\n"
+            + "--XyZ\r\n"
+            + "Content-Disposition: form-data; name=\"image\"; filename=\"i.png\"\r\n"
+            + "Content-Type: image/png\r\n"
+            + "\r\n"
+            + "PNG\r\n"
+            + "--XyZ--\r\n";
+
+    private static MultipartRequest parseRequest(String body,
+            HttpServletRequest req) throws Exception {
+        MultipartRequest mr = new MultipartRequest(req);
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        new MultipartParser(new ByteArrayInputStream(bytes), "--XyZ", mr,
+                "UTF-8", bytes.length).parse();
+        return mr;
+    }
+
+    @Test
+    public void testRepeatedFilesAreKeptSeparateFromTextFields() throws Exception {
+        HttpServletRequest req = mock(HttpServletRequest.class);
+        when(req.getContentType()).thenReturn("multipart/form-data; boundary=XyZ");
+        MultipartRequest mr = parseRequest(FILES_BODY, req);
+
+        List<FilePart> docs = mr.getFiles("doc");
+        assertEquals(2, docs.size());
+        assertEquals("text/plain", docs.get(0).contentType());
+        assertEquals("a.txt", docs.get(0).fileName());
+        assertArrayEquals("AAA".getBytes(StandardCharsets.US_ASCII),
+                docs.get(0).content());
+        assertEquals("application/octet-stream", docs.get(1).contentType());
+        assertEquals("b.bin", docs.get(1).fileName());
+        assertArrayEquals("BB".getBytes(StandardCharsets.US_ASCII),
+                docs.get(1).content());
+        assertEquals("a.txt", mr.getFile("doc").fileName());
+        // The text field is not mixed into the file metadata
+        assertArrayEquals(new String[] {"note"}, mr.getParameterValues("doc"));
+
+        // Single-file compatibility: [contentType, fileName] and attribute
+        assertArrayEquals(new String[] {"image/png", "i.png"},
+                mr.getParameterValues("image"));
+        verify(req).setAttribute("image",
+                mr.getFile("image").content());
+        verify(req).setAttribute("doc", docs.get(0).content());
+        verify(req, never()).setAttribute("doc", docs.get(1).content());
+
+        assertEquals(List.of(), mr.getFiles("missing"));
+        assertNull(mr.getFile("missing"));
+        assertEquals(List.of("doc", "image"), List.copyOf(mr.getFileNames()));
+    }
+
+    @Test
+    public void testQueryParametersMergedWithBodyFields() throws Exception {
+        HttpServletRequest req = mock(HttpServletRequest.class);
+        when(req.getContentType()).thenReturn("multipart/form-data; boundary=XyZ");
+        when(req.getParameterValues("id")).thenReturn(new String[] {"5"});
+        when(req.getParameterValues("tag")).thenReturn(new String[] {"q"});
+        when(req.getParameterNames()).thenAnswer(inv ->
+                java.util.Collections.enumeration(List.of("id", "tag")));
+        MultipartRequest mr = parseRequest("--XyZ\r\n"
+                + "Content-Disposition: form-data; name=\"tag\"\r\n\r\nb\r\n"
+                + "--XyZ\r\n"
+                + "Content-Disposition: form-data; name=\"title\"\r\n\r\nt\r\n"
+                + "--XyZ--", req);
+
+        assertEquals("5", mr.getParameter("id"));
+        assertArrayEquals(new String[] {"q", "b"}, mr.getParameterValues("tag"));
+        assertEquals("q", mr.getParameter("tag"));
+        assertEquals("t", mr.getParameter("title"));
+        assertNull(mr.getParameter("nope"));
+        assertEquals(List.of("id", "tag", "title"),
+                java.util.Collections.list(mr.getParameterNames()));
+        Map<String, String[]> map = mr.getParameterMap();
+        assertEquals(List.of("id", "tag", "title"), List.copyOf(map.keySet()));
+        assertArrayEquals(new String[] {"q", "b"}, map.get("tag"));
     }
 }
