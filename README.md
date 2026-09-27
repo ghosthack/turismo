@@ -333,9 +333,14 @@ post("/upload", new Action() {
 
 ## Releasing
 
-1. Set the release version in `pom.xml` (remove `-SNAPSHOT`)
-2. Commit, push, and merge via PR
-3. CI detects the version change, creates a GitHub release, and deploys to Maven Central
+1. Set the release version in `pom.xml` (remove `-SNAPSHOT`) and merge it to `master` via PR
+2. Tag the merged commit on `master` and push the tag:
+   ```sh
+   git tag v4.0.0
+   git push origin v4.0.0
+   ```
+3. The Release workflow checks that the tag matches the `pom.xml` version and is on
+   `master`, deploys to Maven Central, and creates the GitHub release
 4. Publish the deployment at https://central.sonatype.com/publishing/deployments
 
 ## License
