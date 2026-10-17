@@ -5,11 +5,19 @@ name: Release
 on:
   push:
     tags: [ 'v[0-9]+.[0-9]+.[0-9]+' ]
+  # Manual runs only build and sign the Central bundle; they never deploy.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Optional version to build the dry-run bundle as (not committed)
+        required: false
+        type: string
 
 permissions: {}
 
 jobs:
   release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write # create the GitHub release
@@ -47,7 +55,7 @@ jobs:
           gpg-passphrase: MAVEN_GPG_PASSPHRASE
 
       - name: Deploy to Maven Central
-        run: mvn -B clean deploy -P release
+        run: ./mvnw -B clean deploy -P release
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
@@ -65,3 +73,60 @@ jobs:
             --verify-tag \
             --title "${GITHUB_REF_NAME#v}" \
             --generate-notes
+
+  # Manual runs build and sign the Central bundle against an unreachable
+  # Central URL with placeholder credentials, so nothing can be uploaded, and
+  # attach the bundle as a workflow artifact for inspection.
+  bundle-dry-run:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          java-version: 21
+          distribution: temurin
+          cache: maven
+          server-id: central
+          server-username: MAVEN_CENTRAL_USERNAME
+          server-password: MAVEN_CENTRAL_PASSWORD
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+
+      - name: Build Central bundle without publishing
+        run: |
+          ./mvnw -v
+          # Snapshot deploys go straight to Central's snapshot repository and
+          # ignore centralBaseUrl, so always build the bundle as a release.
+          if [[ -z "$DRY_RUN_VERSION" ]]; then
+            DRY_RUN_VERSION="$(./mvnw -q help:evaluate -Dexpression=project.version -DforceStdout)"
+            DRY_RUN_VERSION="${DRY_RUN_VERSION%-SNAPSHOT}"
+          fi
+          ./mvnw -B -q versions:set -DnewVersion="$DRY_RUN_VERSION" -DgenerateBackupPoms=false
+          VERSION="$(./mvnw -q help:evaluate -Dexpression=project.version -DforceStdout)"
+          if [[ "$VERSION" == *-SNAPSHOT ]]; then
+            echo "::error::Refusing to dry-run snapshot version $VERSION"
+            exit 1
+          fi
+          # skipPublishing would also skip bundling, so let the upload fail
+          # against an unreachable URL instead and keep the bundle it built.
+          ./mvnw -B clean deploy -P release -DcentralBaseUrl=http://127.0.0.1:9 || true
+          test -f target/central-publishing/central-bundle.zip
+          unzip -l target/central-publishing/central-bundle.zip
+        env:
+          DRY_RUN_VERSION: ${{ inputs.version }}
+          MAVEN_CENTRAL_USERNAME: dry-run
+          MAVEN_CENTRAL_PASSWORD: dry-run
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: central-bundle
+          path: target/central-publishing/central-bundle.zip
