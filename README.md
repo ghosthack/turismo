@@ -759,11 +759,12 @@ The workflow uses the `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`,
 reaches `maven-gpg-plugin` through the `MAVEN_GPG_PASSPHRASE` environment
 variable.
 
-CI and releases use the Maven Wrapper (`./mvnw`), which pins Maven 3.9.16. Do
-not switch them to the runner's `mvn`: under Maven 3.10 the central-publishing
-plugin (0.11.0) stages resolver files such as `_remote.repositories` and
-`maven-metadata-local.xml` into the bundle, and Central rejects it with
-"Bundle has content that does NOT have a .pom file".
+CI and releases use the Maven Wrapper (`./mvnw`), which pins Maven 3.10.0, so
+builds do not depend on the runner's `mvn`. Under Maven 3.10 keep
+central-publishing-maven-plugin at 0.12.0 or later: 0.11.0 stages resolver
+files such as `_remote.repositories` and `maven-metadata-local.xml` into the
+bundle, and Central rejects it with "Bundle has content that does NOT have a
+.pom file".
 
 To inspect the signed bundle CI would upload, run the Release workflow manually
 (Actions > Release > Run workflow, optionally with a throwaway `version`). It
