@@ -745,14 +745,18 @@ automatic `OPTIONS`.
 1. Set the release version in `pom.xml` (remove `-SNAPSHOT`) and merge it to `master` via PR
 2. Tag the merged commit on `master` and push the tag:
    ```sh
-   git tag v5.0.0
-   git push origin v5.0.0
+   git tag v5.1.0
+   git push origin v5.1.0
    ```
 3. The Release workflow checks that the tag matches the `pom.xml` version and is on
-   `master`, uploads the signed artifacts to Maven Central, and creates a
-   **draft** GitHub release
-4. Publish the deployment at https://central.sonatype.com/publishing/deployments
-5. Once the artifacts are live on Central, publish the draft release on GitHub
+   `master`, uploads the signed artifacts to Maven Central, waits until Central
+   has published them, and then publishes the GitHub release with generated notes
+
+Pushing the tag is the point of no return: Central releases cannot be withdrawn
+or replaced. Run the bundle dry run below first if in doubt. If the workflow
+fails after Central has published (for example, the one-hour wait runs out),
+create the GitHub release by hand with
+`gh release create vX.Y.Z --verify-tag --title X.Y.Z --generate-notes`.
 
 The workflow uses the `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`,
 `GPG_PRIVATE_KEY` and `GPG_PASSPHRASE` repository secrets; the passphrase
