@@ -61,15 +61,14 @@ jobs:
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
-      # A draft: the Central deployment is published by hand, so the
-      # release is published once the artifacts are live
-      - name: Create GitHub draft release
+      # The deploy step waits until Central has published the artifacts, so
+      # the release goes out once they are live
+      - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \
-            --draft \
             --verify-tag \
             --title "${GITHUB_REF_NAME#v}" \
             --generate-notes
