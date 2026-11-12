@@ -16,16 +16,15 @@
 
 package io.github.ghosthack.turismo;
 
-import java.io.ByteArrayOutputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -38,6 +37,7 @@ import io.github.ghosthack.turismo.annotation.PATCH;
 import io.github.ghosthack.turismo.annotation.POST;
 import io.github.ghosthack.turismo.annotation.PUT;
 import io.github.ghosthack.turismo.http.Server;
+import io.github.ghosthack.turismo.util.PercentEncoding;
 
 /**
  * A set of routes, a not-found handler and (optionally) the embedded
@@ -247,7 +247,7 @@ public class App {
      * route (a replaced pattern route keeps its place in the matching
      * order).
      *
-     * @param method the HTTP method (e.g. "GET")
+     * @param method the HTTP method (e.g. "GET"); case-insensitive
      * @param path   the URL path pattern
      * @param action the action to execute
      * @throws IllegalArgumentException if any argument is null or the
@@ -270,6 +270,8 @@ public class App {
         if (action == null) {
             throw new IllegalArgumentException("action must not be null");
         }
+        // Request methods are upper case, so "get" would never match
+        method = method.toUpperCase(Locale.ROOT);
         PatternRoute pattern = path.contains(":") || path.contains("*")
                 ? new PatternRoute(method, path, action) : null;
         return new Route(method, path, action, pattern);
@@ -440,12 +442,28 @@ public class App {
      * Starts an embedded HTTP server on the given port. Routes must be
      * registered before calling this method. The server runs on
      * background threads; the JVM will not exit while it is running.
-     * Each request is handled on its own virtual thread.
+     * Each request is handled on its own virtual thread. The server
+     * listens on all network interfaces; see {@link #start(String, int)}.
      *
      * @param port the port to listen on (use 0 for a random available port)
      * @throws IllegalStateException if a server is already running
      */
     public synchronized void start(int port) {
+        start(null, port);
+    }
+
+    /**
+     * Starts an embedded HTTP server on the given network interface and
+     * port, as {@link #start(int)} does on all interfaces. Use
+     * {@code "localhost"} or {@code "127.0.0.1"} to accept connections
+     * from this machine only.
+     *
+     * @param host the host name or address to listen on, or {@code null}
+     *        for all interfaces
+     * @param port the port to listen on (use 0 for a random available port)
+     * @throws IllegalStateException if a server is already running
+     */
+    public synchronized void start(String host, int port) {
         if (server != null) {
             throw new IllegalStateException(
                     "Server already running on port " + server.port()
@@ -453,7 +471,7 @@ public class App {
         }
         Server s;
         try {
-            s = new Server(this, port);
+            s = new Server(this, host, port);
         } catch (Exception e) {
             throw new RuntimeException(
                     "Failed to start server on port " + port, e);
@@ -573,7 +591,7 @@ public class App {
         // An encoded slash is part of a segment, not a separator, so the
         // decoded path must not be used to look up an exact route: that
         // would let /admin%2Fsecret reach the /admin/secret route
-        String exactPath = hasEncodedSlash(rawPath) ? null : path;
+        String exactPath = PercentEncoding.hasEncodedSlash(rawPath) ? null : path;
         RouteMatch match = find(method, exactPath, segments);
         if (match == null && "HEAD".equals(method)) {
             match = find("GET", exactPath, segments);
@@ -658,21 +676,6 @@ public class App {
         Turismo.print("Method Not Allowed");
     }
 
-    private static boolean hasEncodedSlash(String rawPath) {
-        if (rawPath == null) {
-            return false;
-        }
-        for (int i = rawPath.indexOf('%'); i >= 0 && i + 2 < rawPath.length();
-                i = rawPath.indexOf('%', i + 1)) {
-            if (rawPath.charAt(i + 1) == '2'
-                    && (rawPath.charAt(i + 2) == 'F'
-                        || rawPath.charAt(i + 2) == 'f')) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     /**
      * Path segments, keeping empty ones: a trailing or doubled slash is
      * significant, as it is for exact routes.
@@ -683,42 +686,9 @@ public class App {
         }
         String[] segments = PathPattern.split(rawPath);
         for (int i = 0; i < segments.length; i++) {
-            segments[i] = percentDecode(segments[i]);
+            segments[i] = PercentEncoding.decode(segments[i]);
         }
         return segments;
-    }
-
-    /**
-     * Decodes {@code %XX} escapes as UTF-8. Unlike {@link
-     * java.net.URLDecoder}, {@code +} is left alone (it is literal in
-     * paths) and malformed escapes are kept as-is.
-     */
-    static String percentDecode(String s) {
-        if (s.indexOf('%') < 0) {
-            return s;
-        }
-        StringBuilder sb = new StringBuilder(s.length());
-        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        int i = 0;
-        while (i < s.length()) {
-            while (i + 2 < s.length() && s.charAt(i) == '%'
-                    && hex(s.charAt(i + 1)) >= 0 && hex(s.charAt(i + 2)) >= 0) {
-                bytes.write(hex(s.charAt(i + 1)) << 4 | hex(s.charAt(i + 2)));
-                i += 3;
-            }
-            if (bytes.size() > 0) {
-                sb.append(bytes.toString(StandardCharsets.UTF_8));
-                bytes.reset();
-            }
-            if (i < s.length()) {
-                sb.append(s.charAt(i++));
-            }
-        }
-        return sb.toString();
-    }
-
-    private static int hex(char c) {
-        return Character.digit(c, 16);
     }
 
     // ---------------------------------------------------------------

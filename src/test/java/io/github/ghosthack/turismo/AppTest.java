@@ -136,4 +136,41 @@ public class AppTest {
             conn.disconnect();
         }
     }
+
+
+    @Test
+    public void testRouteMethodIsCaseInsensitive() {
+        App app = new App();
+        Runnable exact = () -> { };
+        Runnable pattern = () -> { };
+        app.route("get", "/lower", exact);
+        app.route("Post", "/items/:id", pattern);
+        assertSame(exact, app.resolve("GET", "/lower").action);
+        assertSame(pattern, app.resolve("POST", "/items/7").action);
+        // Same route as the upper-case spelling: it is replaced, not added
+        Runnable replaced = () -> { };
+        app.route("GET", "/lower", replaced);
+        assertSame(replaced, app.resolve("GET", "/lower").action);
+    }
+
+    @Test
+    public void testStartOnLoopbackOnly() throws Exception {
+        App app = new App();
+        app.get("/ping", "pong");
+        app.start("127.0.0.1", 0);
+        try {
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection)
+                    java.net.URI.create("http://127.0.0.1:" + app.port()
+                            + "/ping").toURL().openConnection();
+            assertEquals(200, conn.getResponseCode());
+            conn.disconnect();
+            assertThrows(IllegalStateException.class,
+                    () -> app.start("127.0.0.1", 0));
+        } finally {
+            app.stop();
+        }
+        assertThrows(RuntimeException.class,
+                () -> app.start("no such host.invalid", 0));
+        assertThrows(IllegalStateException.class, app::port);
+    }
 }

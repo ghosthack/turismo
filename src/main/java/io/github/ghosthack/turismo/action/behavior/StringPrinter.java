@@ -18,6 +18,8 @@ package io.github.ghosthack.turismo.action.behavior;
 
 import java.io.IOException;
 
+import jakarta.servlet.http.HttpServletResponse;
+
 import io.github.ghosthack.turismo.action.ActionException;
 import io.github.ghosthack.turismo.servlet.Env;
 
@@ -26,18 +28,30 @@ import io.github.ghosthack.turismo.servlet.Env;
  */
 public final class StringPrinter {
 
+    /** Content type of a response whose action set none. */
+    public static final String DEFAULT_CONTENT_TYPE = "text/plain";
+
     /** Creates a new StringPrinter. */
     public StringPrinter() {
     }
 
     /**
-     * Writes the given string to the response writer.
+     * Writes the given string to the response writer. If the action has
+     * not set a content type, the response is sent as
+     * {@value #DEFAULT_CONTENT_TYPE}; call
+     * {@code res().setContentType("text/html")} first to print HTML.
      *
      * @param string the string to write
      */
     public void print(String string) {
         try {
-            Env.res().getWriter().write(string);
+            HttpServletResponse res = Env.res();
+            if (res.getContentType() == null) {
+                // Without a type browsers sniff the body, which turns
+                // text that echoes request data into HTML
+                res.setContentType(DEFAULT_CONTENT_TYPE);
+            }
+            res.getWriter().write(string);
         } catch (IOException e) {
             throw new ActionException(e);
         }

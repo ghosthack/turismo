@@ -404,6 +404,10 @@ public class TurismoTest {
         assertEquals("\"line1\\nline2\"", Turismo.toJson("line1\nline2"));
         assertEquals("\"tab\\there\"", Turismo.toJson("tab\there"));
         assertEquals("\"quote\\\"here\"", Turismo.toJson("quote\"here"));
+        // Safe inside an HTML <script> block
+        assertEquals("\"\\u003c/script>\"", Turismo.toJson("</script>"));
+        assertEquals("\"a\\u2028b\\u2029c\"",
+                Turismo.toJson("a" + (char) 0x2028 + "b" + (char) 0x2029 + "c"));
         assertEquals("\"back\\\\slash\"", Turismo.toJson("back\\slash"));
     }
 
@@ -925,12 +929,12 @@ public class TurismoTest {
 
     @Test
     public void testPercentDecode() {
-        assertEquals("a/b", App.percentDecode("a%2Fb"));
-        assertEquals("caf\u00e9", App.percentDecode("caf%C3%A9"));
-        assertEquals("a+b", App.percentDecode("a+b"));
-        assertEquals("100%", App.percentDecode("100%"));
-        assertEquals("%zz", App.percentDecode("%zz"));
-        assertEquals("%4", App.percentDecode("%4"));
+        assertEquals("a/b", io.github.ghosthack.turismo.util.PercentEncoding.decode("a%2Fb"));
+        assertEquals("caf\u00e9", io.github.ghosthack.turismo.util.PercentEncoding.decode("caf%C3%A9"));
+        assertEquals("a+b", io.github.ghosthack.turismo.util.PercentEncoding.decode("a+b"));
+        assertEquals("100%", io.github.ghosthack.turismo.util.PercentEncoding.decode("100%"));
+        assertEquals("%zz", io.github.ghosthack.turismo.util.PercentEncoding.decode("%zz"));
+        assertEquals("%4", io.github.ghosthack.turismo.util.PercentEncoding.decode("%4"));
     }
 
     @Test

@@ -112,6 +112,8 @@ public class ServletServiceTest {
 
         assertEquals("Hello World", out.toString());
         verify(res, never()).sendError(anyInt());
+        // Not the servlet default, ISO-8859-1
+        verify(res).setCharacterEncoding("UTF-8");
     }
 
     @Test

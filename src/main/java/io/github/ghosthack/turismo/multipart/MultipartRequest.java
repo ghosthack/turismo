@@ -24,9 +24,11 @@ import java.util.Set;
  * {@link #getFile(String)} and {@link #getFiles(String)}.</p>
  *
  * <p>For compatibility, a name that has files but no text values reports
- * the first file's {@code [contentType, fileName]} as its parameter values,
- * and the first file's bytes are also set as a {@code byte[]} request
- * attribute under the field name.</p>
+ * the first file's {@code [contentType, fileName]} as its parameter values.
+ * File contents are only available from {@link #getFile(String)} and
+ * {@link #getFiles(String)}: they are not set as request attributes (as
+ * they were before 6.0), since the field name is chosen by the client and
+ * could replace an attribute set by the application or the container.</p>
  *
  * <p>File names are client-supplied and untrusted; see {@link FilePart}.</p>
  */
@@ -214,19 +216,16 @@ public class MultipartRequest extends HttpServletRequestWrapper implements
     }
 
     /**
-     * Adds an uploaded file. The first file of each name is also set as a
-     * {@code byte[]} request attribute under that name.
+     * Adds an uploaded file, available from {@link #getFile(String)} and
+     * {@link #getFiles(String)}. No request attribute is set.
      *
      * @see Parametrizable#addFile(String, String, String, byte[])
      */
     @Override
     public void addFile(String name, String contentType, String fileName,
             byte[] content) {
-        final List<FilePart> list = files.computeIfAbsent(name,
-                k -> new ArrayList<>(1));
-        list.add(new FilePart(contentType, fileName, content));
-        if (list.size() == 1)
-            setAttribute(name, content);
+        files.computeIfAbsent(name, k -> new ArrayList<>(1))
+                .add(new FilePart(contentType, fileName, content));
     }
 
     /**
@@ -263,6 +262,32 @@ public class MultipartRequest extends HttpServletRequestWrapper implements
      */
     public static MultipartRequest wrapAndParse(HttpServletRequest req, String defaultCharset)
             throws ParseException, IOException {
+        return wrapAndParse(req, defaultCharset,
+                MultipartParser.getMaxContentSize(),
+                MultipartParser.getMaxParts());
+    }
+
+    /**
+     * Wraps the request and parses multipart data with limits of its own,
+     * instead of the JVM-wide {@link MultipartParser} defaults.
+     *
+     * @param req the HTTP request
+     * @param defaultCharset the charset to use if the request has no encoding
+     * @param maxContentSize the largest body accepted, in bytes
+     * @param maxParts the largest number of parts accepted
+     * @return the wrapped multipart request
+     * @throws ContentTooLargeException if the body is larger than
+     *         {@code maxContentSize} or has more than {@code maxParts} parts
+     * @throws ParseException if the multipart data cannot be parsed
+     * @throws IOException if an I/O error occurs
+     * @throws IllegalArgumentException if a limit is not positive
+     */
+    public static MultipartRequest wrapAndParse(HttpServletRequest req,
+            String defaultCharset, int maxContentSize, int maxParts)
+            throws ParseException, IOException {
+        if (maxContentSize <= 0 || maxParts <= 0) {
+            throw new IllegalArgumentException("limits must be positive");
+        }
         final MultipartRequest multipart = new MultipartRequest(req);
         final String boundary = multipart.getBoundary();
         if (boundary == null) {
@@ -271,9 +296,8 @@ public class MultipartRequest extends HttpServletRequestWrapper implements
         // Negative when unknown (chunked); the parser enforces the limit
         // on the bytes actually read
         final long size = req.getContentLengthLong();
-        if (size > MultipartParser.getMaxContentSize()) {
-            throw new ContentTooLargeException(size,
-                    MultipartParser.getMaxContentSize());
+        if (size > maxContentSize) {
+            throw new ContentTooLargeException(size, maxContentSize);
         }
         String encoding = req.getCharacterEncoding();
         if (encoding == null) {
@@ -287,7 +311,7 @@ public class MultipartRequest extends HttpServletRequestWrapper implements
             } catch (IllegalArgumentException e) {
                 throw new ParseException("Unsupported charset: " + encoding, e);
             }
-            parser.parse();
+            parser.setLimits(maxContentSize, maxParts).parse();
         }
         return multipart;
     }

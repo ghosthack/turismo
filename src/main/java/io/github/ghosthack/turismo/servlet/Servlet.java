@@ -88,6 +88,9 @@ public class Servlet extends HttpServlet {
         if (req.getCharacterEncoding() == null) {
             req.setCharacterEncoding(DEFAULT_CHARSET);
         }
+        // The servlet default is ISO-8859-1, which can't write most text.
+        // An action can still choose another charset before it writes
+        res.setCharacterEncoding(DEFAULT_CHARSET);
         final Env previous = Env.get();
         Env.create(req, res, context);
         try {

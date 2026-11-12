@@ -35,7 +35,8 @@ public interface Parametrizable {
      *
      * <p>The default implementation keeps the pre-5.0 contract: it adds
      * {@code [contentType, fileName]} as a parameter and the content as an
-     * attribute, both under {@code name}.</p>
+     * attribute, both under {@code name}. ({@link MultipartRequest}
+     * overrides it and sets no attribute.)</p>
      *
      * @param name        the form field name
      * @param contentType the part's content type

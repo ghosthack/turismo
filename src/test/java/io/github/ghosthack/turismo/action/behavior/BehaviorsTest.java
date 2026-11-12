@@ -5,6 +5,7 @@ import static io.github.ghosthack.turismo.HttpMocks.getResponseMock;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -157,6 +158,17 @@ public class BehaviorsTest {
         new StringPrinter().print("hello");
 
         assertEquals("hello", out.toString());
+        verify(res).setContentType("text/plain");
+    }
+
+    @Test
+    public void testStringPrinterKeepsTheActionsContentType() throws Exception {
+        when(res.getWriter()).thenReturn(new PrintWriter(new StringWriter()));
+        when(res.getContentType()).thenReturn("text/html");
+
+        new StringPrinter().print("<p>hello</p>");
+
+        verify(res, never()).setContentType(any());
     }
 
     @Test

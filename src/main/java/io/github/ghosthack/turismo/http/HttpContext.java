@@ -29,6 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 
 import io.github.ghosthack.turismo.Context;
@@ -42,9 +43,19 @@ import io.github.ghosthack.turismo.Context;
  * the correct {@code Content-Length} header automatically. Large
  * responses can opt into {@linkplain #stream() streaming} instead.
  *
+ * <p>A response body whose handler set no {@code Content-Type} is sent as
+ * {@value #DEFAULT_CONTENT_TYPE}, and every response carries
+ * {@code X-Content-Type-Options: nosniff} unless the handler set that
+ * header itself; set the type (for example {@code text/html}) to send
+ * anything else.
+ *
  * @see Server
  */
 public class HttpContext implements Context {
+
+    /** Content type of a response whose handler set none. */
+    public static final String DEFAULT_CONTENT_TYPE =
+            "text/plain; charset=utf-8";
 
     private final HttpExchange exchange;
     private int statusCode = 200;
@@ -176,6 +187,7 @@ public class HttpContext implements Context {
      */
     public OutputStream stream() throws IOException {
         if (stream == null) {
+            defaultHeaders(true);
             if (mayHaveBody()) {
                 exchange.sendResponseHeaders(statusCode, 0);
                 stream = exchange.getResponseBody();
@@ -222,6 +234,7 @@ public class HttpContext implements Context {
         // No body for HEAD (including HEAD served by a GET route) or for
         // status codes that forbid one
         boolean sendBody = body.length > 0 && mayHaveBody();
+        defaultHeaders(body.length > 0 && allowsBody());
         if (!sendBody && body.length > 0 && isHead() && allowsBody()) {
             // The JDK server takes a HEAD length only from the headers
             exchange.getResponseHeaders().set("Content-Length",
@@ -250,6 +263,22 @@ public class HttpContext implements Context {
         }
         buffer.reset();
         exchange.getResponseHeaders().clear();
+    }
+
+    /**
+     * Headers a response gets unless the handler set them. A body without
+     * a {@code Content-Type} would be sniffed by browsers, which turns
+     * text that echoes request data into HTML; so it is sent as plain
+     * text, and browsers are told not to second-guess the declared type.
+     */
+    private void defaultHeaders(boolean hasBody) {
+        Headers headers = exchange.getResponseHeaders();
+        if (hasBody && !headers.containsKey("Content-Type")) {
+            headers.set("Content-Type", DEFAULT_CONTENT_TYPE);
+        }
+        if (!headers.containsKey("X-Content-Type-Options")) {
+            headers.set("X-Content-Type-Options", "nosniff");
+        }
     }
 
     private void checkNotCommitted() {
