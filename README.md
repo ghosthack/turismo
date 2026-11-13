@@ -829,10 +829,14 @@ fails after Central has published (for example, the one-hour wait runs out),
 create the GitHub release by hand with
 `gh release create vX.Y.Z --verify-tag --title X.Y.Z --generate-notes`.
 
-The workflow uses the `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`,
-`GPG_PRIVATE_KEY` and `GPG_PASSPHRASE` repository secrets; the passphrase
-reaches `maven-gpg-plugin` through the `MAVEN_GPG_PASSPHRASE` environment
-variable.
+Approve the run from its Summary page in a browser (Review deployments); the
+GitHub mobile app does not show the approval.
+
+The workflow uses the `MAVEN_CENTRAL_USERNAME` and `MAVEN_CENTRAL_PASSWORD`
+secrets of the `release` environment, so only an approved release job can
+read them, and the `GPG_PRIVATE_KEY` and `GPG_PASSPHRASE` repository secrets,
+which the dry run needs too. The passphrase reaches `maven-gpg-plugin` through
+the `MAVEN_GPG_PASSPHRASE` environment variable.
 
 CI and releases use the Maven Wrapper (`./mvnw`), which pins Maven 3.10.0, so
 builds do not depend on the runner's `mvn`. Under Maven 3.10 keep
