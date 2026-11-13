@@ -189,9 +189,12 @@ redirectLocal(param("next"));    // 302, only to a path on this site
 notFound();
 ```
 
-A body sent without a content type is `text/plain; charset=utf-8`, so call
-`type("text/html")` before printing HTML (and escape any request data you
-put in it). Every response also carries `X-Content-Type-Options: nosniff`.
+A body sent without a content type is `text/plain; charset=utf-8` when it was
+written with `print()`, and `application/octet-stream` when the handler used
+`output()` or `stream()`. Every response also carries
+`X-Content-Type-Options: nosniff`, so browsers won't guess: call `type()`
+before sending HTML, CSS, JavaScript, images or anything else that isn't
+plain text (and escape any request data you put in HTML).
 
 The embedded server accepts status codes 200-599; others throw
 `IllegalArgumentException`. HEAD requests get the `Content-Length` their GET
@@ -447,8 +450,11 @@ balancer), the proxy's own timeouts usually cover this.
 one only, for example to keep a development server off the network:
 
 ```java
-start("localhost", 8080);
+start("127.0.0.1", 8080);
 ```
+
+A host name is resolved to a single address, so `"localhost"` usually means
+IPv4 only (`127.0.0.1`, not `::1`).
 
 ## Stopping and errors
 
@@ -696,23 +702,28 @@ browsers encode them.
 6.0 changes these defaults and behaviors from 5.x:
 
 - **Default content type**: a response body sent without a `Content-Type`
-  is now `text/plain; charset=utf-8` on the embedded server (and
-  `text/plain` for `print()` in a servlet `Action`). Before, it had no type
-  at all, so browsers guessed, and a handler echoing request data, such as
+  is now `text/plain; charset=utf-8` on the embedded server when written
+  with `print()`, and `application/octet-stream` when written through
+  `output()` or `stream()`. In a servlet `Action`, `print()` sends
+  `text/plain; charset=UTF-8`. Before, there was no type at all, so
+  browsers guessed, and a handler echoing request data, such as
   `print("User ", param("id"))`, could be rendered as HTML (reflected XSS).
-  **Handlers that print HTML must now say so**: `type("text/html")`, or
+  **Handlers must now declare anything that isn't plain text** (HTML, CSS,
+  JavaScript, images, downloads): `type("text/html")`, or
   `res().setContentType("text/html")` in a servlet `Action`.
 - **`X-Content-Type-Options: nosniff`** is sent with every embedded-server
-  response, unless the handler sets that header itself.
+  response, unless the handler sets that header itself. Browsers then
+  refuse a stylesheet or script served with the wrong type.
 - **Multipart files are no longer request attributes**: `MultipartRequest`
   (and so `MultipartFilter`) used to set the first file's bytes as a
   request attribute named after the form field. The client chooses that
   name, so an upload could replace an attribute set by the application or
   the container. Read files with `getFile(name).content()` or
   `getFiles(name)` instead of `(byte[]) getAttribute(name)`.
-- **Servlet responses are UTF-8**: `Servlet` sets the response character
-  encoding to UTF-8 (the servlet default, ISO-8859-1, could not write most
-  text). An action can still set another one before it writes.
+- **Servlet `print()` writes UTF-8**: when the action's content type names
+  no charset, `print()` in an `Action` sets UTF-8 (the servlet default,
+  ISO-8859-1, could not write most text). Output written through `res()`
+  directly, and forwards, are unchanged.
 - **Route methods are case-insensitive**: `route("get", ...)` registers a
   `GET` route; it used to register a route no request could match. This
   applies to `App`, `RoutesMap` and `RoutesList`.

@@ -17,6 +17,7 @@
 package io.github.ghosthack.turismo.action.behavior;
 
 import java.io.IOException;
+import java.util.Locale;
 
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -29,7 +30,8 @@ import io.github.ghosthack.turismo.servlet.Env;
 public final class StringPrinter {
 
     /** Content type of a response whose action set none. */
-    public static final String DEFAULT_CONTENT_TYPE = "text/plain";
+    public static final String DEFAULT_CONTENT_TYPE =
+            "text/plain; charset=UTF-8";
 
     /** Creates a new StringPrinter. */
     public StringPrinter() {
@@ -39,17 +41,25 @@ public final class StringPrinter {
      * Writes the given string to the response writer. If the action has
      * not set a content type, the response is sent as
      * {@value #DEFAULT_CONTENT_TYPE}; call
-     * {@code res().setContentType("text/html")} first to print HTML.
+     * {@code res().setContentType("text/html")} first to print HTML. A
+     * content type set without a charset is written as UTF-8 rather than
+     * the servlet default, ISO-8859-1. Only this method does so: responses
+     * written through {@code res()} directly, and forwards, are untouched.
      *
      * @param string the string to write
      */
     public void print(String string) {
         try {
             HttpServletResponse res = Env.res();
-            if (res.getContentType() == null) {
+            String type = res.getContentType();
+            if (type == null) {
                 // Without a type browsers sniff the body, which turns
                 // text that echoes request data into HTML
                 res.setContentType(DEFAULT_CONTENT_TYPE);
+            } else if (!type.toLowerCase(Locale.ROOT).contains("charset=")) {
+                // The servlet default is ISO-8859-1, which can't write
+                // most text. No effect once the writer has been taken
+                res.setCharacterEncoding("UTF-8");
             }
             res.getWriter().write(string);
         } catch (IOException e) {

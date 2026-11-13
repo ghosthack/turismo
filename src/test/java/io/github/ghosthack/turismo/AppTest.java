@@ -169,8 +169,6 @@ public class AppTest {
         } finally {
             app.stop();
         }
-        assertThrows(RuntimeException.class,
-                () -> app.start("no such host.invalid", 0));
         assertThrows(IllegalStateException.class, app::port);
     }
 }

@@ -158,7 +158,7 @@ public class BehaviorsTest {
         new StringPrinter().print("hello");
 
         assertEquals("hello", out.toString());
-        verify(res).setContentType("text/plain");
+        verify(res).setContentType("text/plain; charset=UTF-8");
     }
 
     @Test
@@ -169,6 +169,19 @@ public class BehaviorsTest {
         new StringPrinter().print("<p>hello</p>");
 
         verify(res, never()).setContentType(any());
+        // No charset in the action's type: not the ISO-8859-1 default
+        verify(res).setCharacterEncoding("UTF-8");
+    }
+
+    @Test
+    public void testStringPrinterKeepsTheActionsCharset() throws Exception {
+        when(res.getWriter()).thenReturn(new PrintWriter(new StringWriter()));
+        when(res.getContentType()).thenReturn("text/html;charset=ISO-8859-15");
+
+        new StringPrinter().print("x");
+
+        verify(res, never()).setContentType(any());
+        verify(res, never()).setCharacterEncoding(anyString());
     }
 
     @Test

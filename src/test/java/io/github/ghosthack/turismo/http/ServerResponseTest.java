@@ -384,6 +384,7 @@ public class ServerResponseTest {
         Turismo.post("/only-post", () -> Turismo.print("x"));
         Turismo.get("/boom", () -> {
             Turismo.type("text/html");
+            Turismo.output(); // the error page is text all the same
             throw new IllegalStateException("boom");
         });
         for (String path : new String[] {"/missing", "/only-post", "/boom"}) {
@@ -406,7 +407,23 @@ public class ServerResponseTest {
     }
 
     @Test
-    public void testStreamingWithoutTypeIsPlainText() throws Exception {
+    public void testRawBytesWithoutTypeAreOctetStream() throws Exception {
+        Turismo.get("/bytes", () -> {
+            try {
+                Turismo.output().write(new byte[] {(byte) 0x89, 'P', 'N', 'G'});
+            } catch (IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
+        });
+        HttpURLConnection conn = open("/bytes");
+        assertEquals("application/octet-stream",
+                conn.getHeaderField("Content-Type"));
+        assertEquals("nosniff", conn.getHeaderField("X-Content-Type-Options"));
+        conn.disconnect();
+    }
+
+    @Test
+    public void testStreamingWithoutTypeIsOctetStream() throws Exception {
         Turismo.get("/s", () -> {
             try {
                 Turismo.stream().write('x');
@@ -415,7 +432,7 @@ public class ServerResponseTest {
             }
         });
         HttpURLConnection conn = open("/s");
-        assertEquals("text/plain; charset=utf-8",
+        assertEquals("application/octet-stream",
                 conn.getHeaderField("Content-Type"));
         assertEquals("x", read(conn.getInputStream()));
         conn.disconnect();
