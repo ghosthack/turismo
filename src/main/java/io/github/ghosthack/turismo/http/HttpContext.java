@@ -29,6 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 
 import io.github.ghosthack.turismo.Context;
@@ -42,14 +43,40 @@ import io.github.ghosthack.turismo.Context;
  * the correct {@code Content-Length} header automatically. Large
  * responses can opt into {@linkplain #stream() streaming} instead.
  *
+ * <p>A response body whose handler set no {@code Content-Type} is sent as
+ * {@value #DEFAULT_CONTENT_TYPE} if it was written with
+ * {@link #print(String)} only, and as {@value #DEFAULT_BINARY_CONTENT_TYPE}
+ * if the handler used {@link #output()} or {@link #stream()}. Every
+ * response carries {@code X-Content-Type-Options: nosniff} unless the
+ * handler set that header itself, so browsers hold a response to its
+ * declared type: set it (for example {@code text/html}, {@code text/css}
+ * or {@code image/png}) to send anything else.
+ *
  * @see Server
  */
 public class HttpContext implements Context {
+
+    /**
+     * Content type of a response whose handler set none and wrote the
+     * body with {@link #print(String)} only.
+     */
+    public static final String DEFAULT_CONTENT_TYPE =
+            "text/plain; charset=utf-8";
+
+    /**
+     * Content type of a response whose handler set none and wrote bytes
+     * through {@link #output()} or {@link #stream()}: what they are is
+     * unknown.
+     */
+    public static final String DEFAULT_BINARY_CONTENT_TYPE =
+            "application/octet-stream";
 
     private final HttpExchange exchange;
     private int statusCode = 200;
     private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
     private OutputStream stream;
+    /** Whether the handler asked for the raw body stream. */
+    private boolean rawOutput;
     private Map<String, List<String>> queryParams;
 
     /**
@@ -152,6 +179,7 @@ public class HttpContext implements Context {
      */
     @Override
     public OutputStream output() {
+        rawOutput = true;
         return stream != null ? stream : buffer;
     }
 
@@ -176,6 +204,8 @@ public class HttpContext implements Context {
      */
     public OutputStream stream() throws IOException {
         if (stream == null) {
+            rawOutput = true;
+            defaultHeaders(allowsBody());
             if (mayHaveBody()) {
                 exchange.sendResponseHeaders(statusCode, 0);
                 stream = exchange.getResponseBody();
@@ -222,6 +252,7 @@ public class HttpContext implements Context {
         // No body for HEAD (including HEAD served by a GET route) or for
         // status codes that forbid one
         boolean sendBody = body.length > 0 && mayHaveBody();
+        defaultHeaders(body.length > 0 && allowsBody());
         if (!sendBody && body.length > 0 && isHead() && allowsBody()) {
             // The JDK server takes a HEAD length only from the headers
             exchange.getResponseHeaders().set("Content-Length",
@@ -248,8 +279,27 @@ public class HttpContext implements Context {
         if (stream != null) {
             return;
         }
+        rawOutput = false;
         buffer.reset();
         exchange.getResponseHeaders().clear();
+    }
+
+    /**
+     * Headers a response gets unless the handler set them. A body without
+     * a {@code Content-Type} would be sniffed by browsers, which turns
+     * text that echoes request data into HTML; so printed text is sent as
+     * plain text and raw bytes as an opaque download, and browsers are
+     * told not to second-guess the declared type.
+     */
+    private void defaultHeaders(boolean hasBody) {
+        Headers headers = exchange.getResponseHeaders();
+        if (hasBody && !headers.containsKey("Content-Type")) {
+            headers.set("Content-Type", rawOutput
+                    ? DEFAULT_BINARY_CONTENT_TYPE : DEFAULT_CONTENT_TYPE);
+        }
+        if (!headers.containsKey("X-Content-Type-Options")) {
+            headers.set("X-Content-Type-Options", "nosniff");
+        }
     }
 
     private void checkNotCommitted() {

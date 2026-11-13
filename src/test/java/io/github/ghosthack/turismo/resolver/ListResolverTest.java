@@ -246,4 +246,23 @@ public class ListResolverTest {
             }, null);
         });
     }
+
+
+    @Test
+    public void testNullActionIsRejected() {
+        assertThrows(IllegalArgumentException.class,
+                () -> resolver.route("GET", "/x", (Runnable) null));
+    }
+
+    @Test
+    public void testMethodIsCaseInsensitive() {
+        final Runnable action = () -> { };
+        resolver.route("get", "/lower/:id", action);
+        resolver.route("Get", "/alias/:id", "/lower/:id");
+
+        Env.create(getRequestMock("GET", "/lower/1"), getResponseMock(), null);
+        assertSame(action, resolver.resolve());
+        Env.create(getRequestMock("GET", "/alias/1"), getResponseMock(), null);
+        assertSame(action, resolver.resolve());
+    }
 }

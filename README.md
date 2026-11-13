@@ -10,17 +10,17 @@ A lightweight Sinatra/Express-style Java web framework.
 <dependency>
     <groupId>io.github.ghosthack</groupId>
     <artifactId>turismo</artifactId>
-    <version>5.0.0</version>
+    <version>6.0.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'io.github.ghosthack:turismo:5.0.0'
+implementation 'io.github.ghosthack:turismo:6.0.0'
 ```
 
-Requires Java 21+. (3.x supports Java 17.) See [Upgrading to 5.0](#upgrading-to-50) for breaking changes.
+Requires Java 21+. (3.x supports Java 17.) See [Upgrading to 6.0](#upgrading-to-60) and [Upgrading to 5.0](#upgrading-to-50) for breaking changes.
 
 > **Note:** Versions 1.x were published under `com.ghosthack:turismo`. The groupId changed to
 > `io.github.ghosthack` starting with 2.0.0.
@@ -188,6 +188,13 @@ redirectLocal(param("next"));    // 302, only to a path on this site
 // 404
 notFound();
 ```
+
+A body sent without a content type is `text/plain; charset=utf-8` when it was
+written with `print()`, and `application/octet-stream` when the handler used
+`output()` or `stream()`. Every response also carries
+`X-Content-Type-Options: nosniff`, so browsers won't guess: call `type()`
+before sending HTML, CSS, JavaScript, images or anything else that isn't
+plain text (and escape any request data you put in HTML).
 
 The embedded server accepts status codes 200-599; others throw
 `IllegalArgumentException`. HEAD requests get the `Content-Length` their GET
@@ -437,6 +444,18 @@ Set them before the first server starts (setting them later with
 `System.setProperty` has no effect). Behind a reverse proxy (nginx, a load
 balancer), the proxy's own timeouts usually cover this.
 
+## Binding to one interface
+
+`start(8080)` listens on every network interface. Pass a host to listen on
+one only, for example to keep a development server off the network:
+
+```java
+start("127.0.0.1", 8080);
+```
+
+A host name is resolved to a single address, so `"localhost"` usually means
+IPv4 only (`127.0.0.1`, not `::1`).
+
 ## Stopping and errors
 
 ```java
@@ -628,6 +647,7 @@ from the request.)
 ### Multipart file uploads
 
 ```java
+import io.github.ghosthack.turismo.multipart.FilePart;
 import io.github.ghosthack.turismo.multipart.MultipartRequest;
 
 post("/upload", new Action() {
@@ -635,11 +655,9 @@ post("/upload", new Action() {
     public void run() {
         try {
             MultipartRequest multipart = MultipartRequest.wrapAndParse(req());
-            String[] meta = multipart.getParameterValues("image");
-            String contentType = meta[0];
-            String fileName = meta[1];
-            byte[] bytes = (byte[]) multipart.getAttribute("image");
-            print("Uploaded " + fileName + " (" + bytes.length + " bytes)");
+            FilePart image = multipart.getFile("image");
+            print("Uploaded " + image.fileName() + " ("
+                    + image.content().length + " bytes)");
         } catch (Exception e) {
             throw new ActionException(e);
         }
@@ -655,15 +673,18 @@ malformed ones; `MultipartFilter` answers those with `413` and `400`. Text is
 decoded with the request's charset, defaulting to UTF-8. A file part without
 a `Content-Type` is reported as `application/octet-stream`. Bodies with more
 than 1000 parts are rejected like oversized ones
-(`MultipartParser.setMaxParts`).
+(`MultipartParser.setMaxParts`). Those two setters change the default for the
+whole JVM; to limit one upload endpoint, pass the limits to
+`wrapAndParse(req, charset, maxContentSize, maxParts)` or set the
+`max-content-size` and `max-parts` init parameters of a `MultipartFilter`.
 
 `getParameterValues(name)` and the other parameter methods return the query
 string values first, then the body's text fields, so `/upload?id=5` keeps
-`id`. Files are kept apart from text fields. The `[contentType, fileName]`
-array and `byte[]` attribute above describe the first file of a field (the
-array is only reported when the name has no query or text values); use
-`getFile` and `getFiles` for everything, including several files under one
-name:
+`id`. Files are kept apart from text fields: `getFile` returns the first file
+of a field and `getFiles` all of them, including several files under one
+name. (For compatibility, a name with files but no query or text values still
+reports the first file's `[contentType, fileName]` as its parameter values.
+File contents are never set as request attributes.)
 
 ```java
 for (FilePart file : multipart.getFiles("attachments")) {
@@ -675,6 +696,49 @@ for (FilePart file : multipart.getFiles("attachments")) {
 so never use it as a path without sanitizing it. Backslashes are kept
 literally, and `%22`, `%0D` and `%0A` are decoded to `"`, CR and LF, as
 browsers encode them.
+
+## Upgrading to 6.0
+
+6.0 changes these defaults and behaviors from 5.x:
+
+- **Default content type**: a response body sent without a `Content-Type`
+  is now `text/plain; charset=utf-8` on the embedded server when written
+  with `print()`, and `application/octet-stream` when written through
+  `output()` or `stream()`. In a servlet `Action`, `print()` sends
+  `text/plain; charset=UTF-8`. Before, there was no type at all, so
+  browsers guessed, and a handler echoing request data, such as
+  `print("User ", param("id"))`, could be rendered as HTML (reflected XSS).
+  **Handlers must now declare anything that isn't plain text** (HTML, CSS,
+  JavaScript, images, downloads): `type("text/html")`, or
+  `res().setContentType("text/html")` in a servlet `Action`.
+- **`X-Content-Type-Options: nosniff`** is sent with every embedded-server
+  response, unless the handler sets that header itself. Browsers then
+  refuse a stylesheet or script served with the wrong type.
+- **Multipart files are no longer request attributes**: `MultipartRequest`
+  (and so `MultipartFilter`) used to set the first file's bytes as a
+  request attribute named after the form field. The client chooses that
+  name, so an upload could replace an attribute set by the application or
+  the container. Read files with `getFile(name).content()` or
+  `getFiles(name)` instead of `(byte[]) getAttribute(name)`.
+- **Servlet `print()` writes UTF-8**: when the action's content type names
+  no charset, `print()` in an `Action` sets UTF-8 (the servlet default,
+  ISO-8859-1, could not write most text). Output written through `res()`
+  directly, and forwards, are unchanged.
+- **Route methods are case-insensitive**: `route("get", ...)` registers a
+  `GET` route; it used to register a route no request could match. This
+  applies to `App`, `RoutesMap` and `RoutesList`.
+- **`RoutesList` rejects a null action**, as `RoutesMap` and `App` do.
+- **JSON strings escape `<`**, U+2028 and U+2029 as `\uXXXX`, so `toJson()`
+  output can be placed in an HTML `<script>` block. Parsed values are
+  unchanged.
+- **Removed internals**: the package-private `App.percentDecode` moved to
+  `util.PercentEncoding.decode`.
+
+New in 6.0: `start(host, port)` ([Binding to one
+interface](#binding-to-one-interface)) and per-endpoint multipart limits
+(`MultipartParser.setLimits`, `wrapAndParse(req, charset, maxContentSize,
+maxParts)`, and the `max-content-size`/`max-parts` init parameters of
+`MultipartFilter`).
 
 ## Upgrading to 5.0
 

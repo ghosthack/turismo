@@ -347,4 +347,105 @@ public class ServerResponseTest {
         }
         @Override public OutputStream output() { return out; }
     }
+
+
+    // ---------------------------------------------------------------
+    // Default content type
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testBodyWithoutTypeIsPlainTextAndNotSniffed() throws Exception {
+        Turismo.get("/users/:id", () -> Turismo.print("User ", Turismo.param("id")));
+        HttpURLConnection conn = open("/users/%3Cscript%3Ealert(1)%3C%2Fscript%3E");
+        assertEquals(200, conn.getResponseCode());
+        assertEquals("text/plain; charset=utf-8",
+                conn.getHeaderField("Content-Type"));
+        assertEquals("nosniff", conn.getHeaderField("X-Content-Type-Options"));
+        assertEquals("User <script>alert(1)</script>",
+                read(conn.getInputStream()));
+        conn.disconnect();
+    }
+
+    @Test
+    public void testHandlerContentTypeIsKept() throws Exception {
+        Turismo.get("/page", () -> {
+            Turismo.type("text/html");
+            Turismo.header("X-Content-Type-Options", "custom");
+            Turismo.print("<p>hi</p>");
+        });
+        HttpURLConnection conn = open("/page");
+        assertEquals("text/html", conn.getHeaderField("Content-Type"));
+        assertEquals("custom", conn.getHeaderField("X-Content-Type-Options"));
+        conn.disconnect();
+    }
+
+    @Test
+    public void testBuiltInResponsesArePlainText() throws Exception {
+        Turismo.post("/only-post", () -> Turismo.print("x"));
+        Turismo.get("/boom", () -> {
+            Turismo.type("text/html");
+            Turismo.output(); // the error page is text all the same
+            throw new IllegalStateException("boom");
+        });
+        for (String path : new String[] {"/missing", "/only-post", "/boom"}) {
+            HttpURLConnection conn = open(path);
+            assertTrue(conn.getResponseCode() >= 400, path);
+            assertEquals("text/plain; charset=utf-8",
+                    conn.getHeaderField("Content-Type"), path);
+            conn.disconnect();
+        }
+    }
+
+    @Test
+    public void testNoContentTypeWithoutBody() throws Exception {
+        Turismo.get("/empty", () -> Turismo.status(204));
+        HttpURLConnection conn = open("/empty");
+        assertEquals(204, conn.getResponseCode());
+        assertNull(conn.getHeaderField("Content-Type"));
+        assertEquals("nosniff", conn.getHeaderField("X-Content-Type-Options"));
+        conn.disconnect();
+    }
+
+    @Test
+    public void testRawBytesWithoutTypeAreOctetStream() throws Exception {
+        Turismo.get("/bytes", () -> {
+            try {
+                Turismo.output().write(new byte[] {(byte) 0x89, 'P', 'N', 'G'});
+            } catch (IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
+        });
+        HttpURLConnection conn = open("/bytes");
+        assertEquals("application/octet-stream",
+                conn.getHeaderField("Content-Type"));
+        assertEquals("nosniff", conn.getHeaderField("X-Content-Type-Options"));
+        conn.disconnect();
+    }
+
+    @Test
+    public void testStreamingWithoutTypeIsOctetStream() throws Exception {
+        Turismo.get("/s", () -> {
+            try {
+                Turismo.stream().write('x');
+            } catch (IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
+        });
+        HttpURLConnection conn = open("/s");
+        assertEquals("application/octet-stream",
+                conn.getHeaderField("Content-Type"));
+        assertEquals("x", read(conn.getInputStream()));
+        conn.disconnect();
+    }
+
+    @Test
+    public void testHeadCarriesTheDefaultContentType() throws Exception {
+        Turismo.get("/h", () -> Turismo.print("hello"));
+        HttpURLConnection conn = open("/h");
+        conn.setRequestMethod("HEAD");
+        assertEquals(200, conn.getResponseCode());
+        assertEquals("text/plain; charset=utf-8",
+                conn.getHeaderField("Content-Type"));
+        conn.disconnect();
+    }
 }

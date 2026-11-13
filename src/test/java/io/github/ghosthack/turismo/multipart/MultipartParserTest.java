@@ -464,13 +464,11 @@ public class MultipartParserTest {
         // The text field is not mixed into the file metadata
         assertArrayEquals(new String[] {"note"}, mr.getParameterValues("doc"));
 
-        // Single-file compatibility: [contentType, fileName] and attribute
+        // Single-file compatibility: [contentType, fileName]
         assertArrayEquals(new String[] {"image/png", "i.png"},
                 mr.getParameterValues("image"));
-        verify(req).setAttribute("image",
-                mr.getFile("image").content());
-        verify(req).setAttribute("doc", docs.get(0).content());
-        verify(req, never()).setAttribute("doc", docs.get(1).content());
+        // The field name is the client's: it must not set attributes
+        verify(req, never()).setAttribute(any(), any());
 
         assertEquals(List.of(), mr.getFiles("missing"));
         assertNull(mr.getFile("missing"));
@@ -501,5 +499,64 @@ public class MultipartParserTest {
         Map<String, String[]> map = mr.getParameterMap();
         assertEquals(List.of("id", "tag", "title"), List.copyOf(map.keySet()));
         assertArrayEquals(new String[] {"q", "b"}, map.get("tag"));
+    }
+
+
+    @Test
+    public void testParserLimitsApplyToThatParserOnly() throws Exception {
+        byte[] bytes = FILES_BODY.getBytes(StandardCharsets.UTF_8);
+        HttpServletRequest req = mock(HttpServletRequest.class);
+        assertThrows(ContentTooLargeException.class, () ->
+                new MultipartParser(new ByteArrayInputStream(bytes), "--XyZ",
+                        new MultipartRequest(req), "UTF-8", -1)
+                        .setLimits(10, 1000).parse());
+        assertThrows(ContentTooLargeException.class, () ->
+                new MultipartParser(new ByteArrayInputStream(bytes), "--XyZ",
+                        new MultipartRequest(req), "UTF-8", bytes.length)
+                        .setLimits(bytes.length, 3).parse());
+        assertThrows(IllegalArgumentException.class, () ->
+                new MultipartParser(new ByteArrayInputStream(bytes), "--XyZ",
+                        new MultipartRequest(req), "UTF-8", bytes.length)
+                        .setLimits(0, 1));
+        // The JVM-wide defaults are untouched
+        assertEquals(MultipartParser.DEFAULT_MAX_CONTENT_SIZE,
+                MultipartParser.getMaxContentSize());
+        assertEquals(2, parseRequest(FILES_BODY, req).getFiles("doc").size());
+    }
+
+    @Test
+    public void testFilterLimitsFromInitParameters() throws Exception {
+        byte[] body = FILES_BODY.getBytes(StandardCharsets.UTF_8);
+        jakarta.servlet.FilterConfig config =
+                mock(jakarta.servlet.FilterConfig.class);
+        when(config.getInitParameter("max-parts")).thenReturn(" 3 ");
+        MultipartFilter filter = new MultipartFilter();
+        filter.init(config);
+
+        HttpServletResponse res = mock(HttpServletResponse.class);
+        FilterChain chain = mock(FilterChain.class);
+        filter.doFilter(request("multipart/form-data; boundary=XyZ", body,
+                body.length), res, chain);
+        verify(res).sendError(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
+        verify(chain, never()).doFilter(any(), any());
+
+        // A filter without the parameter still accepts the same body
+        HttpServletResponse res2 = mock(HttpServletResponse.class);
+        FilterChain chain2 = mock(FilterChain.class);
+        new MultipartFilter().doFilter(request(
+                "multipart/form-data; boundary=XyZ", body, body.length),
+                res2, chain2);
+        verify(chain2).doFilter(any(MultipartRequest.class), any());
+    }
+
+    @Test
+    public void testFilterRejectsInvalidLimit() {
+        for (String bad : new String[] {"0", "-5", "many"}) {
+            jakarta.servlet.FilterConfig config =
+                    mock(jakarta.servlet.FilterConfig.class);
+            when(config.getInitParameter("max-content-size")).thenReturn(bad);
+            assertThrows(jakarta.servlet.ServletException.class,
+                    () -> new MultipartFilter().init(config));
+        }
     }
 }

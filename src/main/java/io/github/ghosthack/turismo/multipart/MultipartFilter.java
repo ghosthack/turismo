@@ -16,8 +16,8 @@ import jakarta.servlet.http.HttpServletResponse;
  * <p>If you have a custom Request object added to the filter chain, this filter
  * should be the first.</p>
  *
- * <p>The file parameter data is added as a byte array attribute with the same
- * parameter name.</p>
+ * <p>The request passed down the chain is a {@link MultipartRequest}, which
+ * holds the uploaded files.</p>
  *
  * <blockquote>Example:
  * <pre>
@@ -26,9 +26,12 @@ import jakarta.servlet.http.HttpServletResponse;
  *
  * File contents are obtained via:
  * <pre>
- * byte[] imageFileBytes = (byte[]) request.getAttribute("imageFile");
+ * FilePart imageFile = ((MultipartRequest) request).getFile("imageFile");
+ * byte[] imageFileBytes = imageFile.content();
  * </pre>
- * for later manipulation.</blockquote>
+ * for later manipulation. (Before 6.0 the bytes were also set as a request
+ * attribute under the field name; they no longer are, since that name is
+ * chosen by the client.)</blockquote>
  *
  * <p>The file-name and content-type data sent by the browser are stored as a
  * String array in the request object.</p>
@@ -55,7 +58,9 @@ import jakarta.servlet.http.HttpServletResponse;
  * not declare one. A malformed body gets {@code 400 Bad Request} and one
  * larger than {@link MultipartParser#getMaxContentSize()} (or with more than
  * {@link MultipartParser#getMaxParts()} parts) gets
- * {@code 413 Content Too Large}.</p>
+ * {@code 413 Content Too Large}. The optional {@code max-content-size}
+ * (bytes) and {@code max-parts} init parameters set those limits for this
+ * filter alone.</p>
  *
  * <p>Configuration details:</p>
  * <pre>
@@ -80,9 +85,14 @@ public class MultipartFilter implements jakarta.servlet.Filter {
     }
 
     private static final String CHARSET_NAME_PARAMETER = "charset-name";
+    private static final String MAX_CONTENT_SIZE_PARAMETER = "max-content-size";
+    private static final String MAX_PARTS_PARAMETER = "max-parts";
     private static final String DEFAULT_CHARSET_NAME = "UTF-8";
 
     private String charsetName = DEFAULT_CHARSET_NAME;
+    // Null: use the JVM-wide MultipartParser default at request time
+    private Integer maxContentSize;
+    private Integer maxParts;
 
     /**
      * @see jakarta.servlet.Filter#doFilter(jakarta.servlet.ServletRequest,
@@ -98,7 +108,11 @@ public class MultipartFilter implements jakarta.servlet.Filter {
             final MultipartRequest multipartRequest;
             try {
               multipartRequest = MultipartRequest.wrapAndParse(
-                      (HttpServletRequest) request, charsetName);
+                      (HttpServletRequest) request, charsetName,
+                      maxContentSize != null ? maxContentSize
+                              : MultipartParser.getMaxContentSize(),
+                      maxParts != null ? maxParts
+                              : MultipartParser.getMaxParts());
             } catch (ContentTooLargeException e) {
                 ((HttpServletResponse) response).sendError(
                         HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
@@ -125,6 +139,27 @@ public class MultipartFilter implements jakarta.servlet.Filter {
         if (configCharset != null) {
             this.charsetName = configCharset;
         }
+        this.maxContentSize = limit(config, MAX_CONTENT_SIZE_PARAMETER);
+        this.maxParts = limit(config, MAX_PARTS_PARAMETER);
+    }
+
+    /** A positive integer init parameter, or null when it is not set. */
+    private static Integer limit(FilterConfig config, String name)
+            throws ServletException {
+        final String value = config.getInitParameter(name);
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            final int limit = Integer.parseInt(value.trim());
+            if (limit > 0) {
+                return limit;
+            }
+        } catch (NumberFormatException e) {
+            // reported below
+        }
+        throw new ServletException("Init parameter '" + name
+                + "' must be a positive integer: " + value);
     }
 
     /**

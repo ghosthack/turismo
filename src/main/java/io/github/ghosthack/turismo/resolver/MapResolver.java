@@ -17,6 +17,7 @@
 package io.github.ghosthack.turismo.resolver;
 
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -135,7 +136,9 @@ public class MapResolver extends MethodPathResolver {
             throw new IllegalArgumentException("action must not be null");
         }
         Map<String, Runnable> methodMap = method == null ? anyMethodMap
-                : methodPathMap.computeIfAbsent(method, k -> new ConcurrentHashMap<>());
+                // Request methods are upper case, so "get" would never match
+                : methodPathMap.computeIfAbsent(method.toUpperCase(Locale.ROOT),
+                        k -> new ConcurrentHashMap<>());
         methodMap.put(path, action);
     }
 

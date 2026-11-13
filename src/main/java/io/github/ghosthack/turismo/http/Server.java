@@ -17,6 +17,7 @@
 package io.github.ghosthack.turismo.http;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.concurrent.ExecutorService;
@@ -92,11 +93,31 @@ public class Server {
      * @throws IllegalArgumentException if app is null
      */
     public Server(App app, int port) throws IOException {
+        this(app, null, port);
+    }
+
+    /**
+     * Creates a server for the given app, bound to the given network
+     * interface and port.
+     *
+     * @param app  the app whose routes are served
+     * @param host the host name or address to listen on (for example
+     *        {@code "localhost"} to accept local connections only), or
+     *        {@code null} for all interfaces
+     * @param port the port to listen on (use 0 for a random available port)
+     * @throws IOException if the server socket cannot be created, or the
+     *         host can't be resolved
+     * @throws IllegalArgumentException if app is null
+     */
+    public Server(App app, String host, int port) throws IOException {
         if (app == null) {
             throw new IllegalArgumentException("app must not be null");
         }
         this.app = app;
-        this.server = HttpServer.create(new InetSocketAddress(port), 0);
+        InetSocketAddress address = host == null
+                ? new InetSocketAddress(port)
+                : new InetSocketAddress(InetAddress.getByName(host), port);
+        this.server = HttpServer.create(address, 0);
         this.server.createContext("/", this::handle);
         this.executor = Executors.newThreadPerTaskExecutor(
                 Thread.ofVirtual().name("turismo-", 0).factory());

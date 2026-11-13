@@ -235,7 +235,7 @@ public final class Turismo {
      * Paths containing {@code :} or {@code *} are treated as pattern
      * routes; all others are exact-match routes resolved in O(1).
      *
-     * @param method the HTTP method (e.g. "GET")
+     * @param method the HTTP method (e.g. "GET"); case-insensitive
      * @param path   the URL path pattern
      * @param action the action to execute
      * @throws IllegalArgumentException if any argument is null or the
@@ -590,7 +590,9 @@ public final class Turismo {
      * {@link Iterable}, arrays, records (as objects keyed by component
      * name), {@link String}, {@link Character}, enums (by name),
      * {@link Number}, {@link Boolean}, and {@code null}. Non-finite
-     * numbers (NaN, Infinity) are written as {@code null}.
+     * numbers (NaN, Infinity) are written as {@code null}. In strings,
+     * {@code <}, U+2028 and U+2029 are written as Unicode escapes,
+     * so the result can be placed in an HTML {@code <script>} block.
      *
      * @param obj the object to serialize
      * @return the JSON string
@@ -654,7 +656,10 @@ public final class Turismo {
                 case '\r': sb.append("\\r");  break;
                 case '\t': sb.append("\\t");  break;
                 default:
-                    if (c < 0x20) {
+                    // '<' so "</script>" can't end an inline script, and
+                    // the line separators JavaScript used to reject
+                    if (c < 0x20 || c == '<' || c == 0x2028
+                            || c == 0x2029) {
                         sb.append(String.format("\\u%04x", (int) c));
                     } else {
                         sb.append(c);
@@ -833,6 +838,20 @@ public final class Turismo {
      */
     public static void start(int port) {
         APP.start(port);
+    }
+
+    /**
+     * Starts an embedded HTTP server on the given network interface and
+     * port. Use {@code "localhost"} or {@code "127.0.0.1"} to accept
+     * connections from this machine only.
+     *
+     * @param host the host name or address to listen on, or {@code null}
+     *        for all interfaces
+     * @param port the port to listen on (use 0 for a random available port)
+     * @throws IllegalStateException if a server is already running
+     */
+    public static void start(String host, int port) {
+        APP.start(host, port);
     }
 
     /**

@@ -50,7 +50,9 @@ public final class MultipartParser {
     private static volatile int maxParts = DEFAULT_MAX_PARTS;
 
     /**
-     * Sets the maximum allowed content size for multipart uploads.
+     * Sets the default maximum content size for multipart uploads, for
+     * every parser in the JVM that sets no limit of its own (see
+     * {@link #setLimits} and the {@link MultipartFilter} init parameters).
      *
      * @param maxSize the maximum size in bytes (must be positive)
      */
@@ -70,7 +72,8 @@ public final class MultipartParser {
     }
 
     /**
-     * Sets the maximum number of parts (fields and files) a body may have.
+     * Sets the default maximum number of parts (fields and files) a body
+     * may have, for every parser in the JVM that sets no limit of its own.
      *
      * @param max the maximum number of parts (must be positive)
      */
@@ -95,6 +98,9 @@ public final class MultipartParser {
     private final Parametrizable parameters;
     private final Charset charset;
     private final long size;
+    // This parser's limits; the JVM-wide defaults unless setLimits is called
+    private int contentLimit = maxContentSize;
+    private int partLimit = maxParts;
 
     // The body read so far; valid bytes are data[0, length)
     private byte[] data;
@@ -156,19 +162,38 @@ public final class MultipartParser {
     }
 
     /**
+     * Sets the limits of this parser only, in place of the JVM-wide
+     * defaults ({@link #getMaxContentSize()} and {@link #getMaxParts()})
+     * it was created with.
+     *
+     * @param maxContentSize the largest body accepted, in bytes (must be
+     *                       positive)
+     * @param maxParts       the largest number of parts accepted (must be
+     *                       positive)
+     * @return this parser
+     * @throws IllegalArgumentException if a limit is not positive
+     */
+    public MultipartParser setLimits(int maxContentSize, int maxParts) {
+        if (maxContentSize <= 0 || maxParts <= 0)
+            throw new IllegalArgumentException("limits must be positive");
+        this.contentLimit = maxContentSize;
+        this.partLimit = maxParts;
+        return this;
+    }
+
+    /**
      * Parses the body, adding its fields to the parameters container.
      *
-     * @throws ContentTooLargeException if the body is larger than
-     *             {@link #getMaxContentSize()} or has more than
-     *             {@link #getMaxParts()} parts
+     * @throws ContentTooLargeException if the body is larger than the
+     *             content size limit or has more parts than the part
+     *             limit (see {@link #setLimits})
      * @throws ParseException if the body is not valid multipart data
      * @throws IOException if reading the body fails
      */
     public void parse() throws ParseException, IOException {
-        final int max = maxContentSize;
+        final int max = contentLimit;
         if (size > max)
             throw new ContentTooLargeException(size, max);
-        final int partLimit = maxParts;
         readAll(max);
 
         int parts = 0;

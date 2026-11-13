@@ -112,6 +112,7 @@ public class ServletServiceTest {
 
         assertEquals("Hello World", out.toString());
         verify(res, never()).sendError(anyInt());
+        verify(res).setContentType("text/plain; charset=UTF-8");
     }
 
     @Test

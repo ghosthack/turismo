@@ -18,6 +18,7 @@ package io.github.ghosthack.turismo.resolver;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -54,6 +55,9 @@ public class ListResolver extends MethodPathResolver {
         public ParsedEntry(Runnable runnable, String path) {
             if (path == null) {
                 throw new IllegalArgumentException("path must not be null");
+            }
+            if (runnable == null) {
+                throw new IllegalArgumentException("action must not be null");
             }
             this.runnable = runnable;
             this.path = path;
@@ -143,7 +147,8 @@ public class ListResolver extends MethodPathResolver {
      */
     @Override
     public void route(String method, String newPath, String targetPath) {
-        List<ParsedEntry> pathList = methodPathList.get(method);
+        List<ParsedEntry> pathList = method != null
+                ? methodPathList.get(method.toUpperCase(Locale.ROOT)) : null;
         if(pathList == null) throw new IllegalArgumentException(
                 "No routes registered for HTTP method '" + method + "'");
         for(ParsedEntry parsedEntry: pathList) {
@@ -163,7 +168,9 @@ public class ListResolver extends MethodPathResolver {
             throw new IllegalArgumentException("method must not be null");
         }
         ParsedEntry parsed = new ParsedEntry(runnable, path);
-        methodPathList.computeIfAbsent(method, k -> new CopyOnWriteArrayList<>())
+        // Request methods are upper case, so "get" would never match
+        methodPathList.computeIfAbsent(method.toUpperCase(Locale.ROOT),
+                k -> new CopyOnWriteArrayList<>())
                 .add(parsed);
     }
 

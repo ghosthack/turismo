@@ -16,12 +16,10 @@
 
 package io.github.ghosthack.turismo.resolver;
 
-import java.io.ByteArrayOutputStream;
-import java.nio.charset.StandardCharsets;
-
 import jakarta.servlet.http.HttpServletRequest;
 
 import io.github.ghosthack.turismo.PathPattern;
+import io.github.ghosthack.turismo.util.PercentEncoding;
 
 /**
  * Encoded-slash handling for servlet requests, matching the embedded
@@ -88,56 +86,16 @@ final class EncodedPath {
      * @return {@code true} if it has an encoded slash
      */
     static boolean hasEncodedSlash(String rawPath) {
-        if (rawPath == null) {
-            return false;
-        }
-        for (int i = rawPath.indexOf('%'); i >= 0 && i + 2 < rawPath.length();
-                i = rawPath.indexOf('%', i + 1)) {
-            if (rawPath.charAt(i + 1) == '2'
-                    && (rawPath.charAt(i + 2) == 'F'
-                        || rawPath.charAt(i + 2) == 'f')) {
-                return true;
-            }
-        }
-        return false;
+        return PercentEncoding.hasEncodedSlash(rawPath);
     }
 
-    /** Drops {@code ;name=value} path parameters, as containers do. */
     private static String stripPathParameters(String segment) {
         int semi = segment.indexOf(';');
         return semi < 0 ? segment : segment.substring(0, semi);
     }
 
-    /**
-     * Decodes {@code %XX} escapes as UTF-8. {@code +} is left alone (it is
-     * literal in paths) and malformed escapes are kept as-is.
-     */
     static String percentDecode(String s) {
-        if (s.indexOf('%') < 0) {
-            return s;
-        }
-        StringBuilder sb = new StringBuilder(s.length());
-        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        int i = 0;
-        while (i < s.length()) {
-            while (i + 2 < s.length() && s.charAt(i) == '%'
-                    && hex(s.charAt(i + 1)) >= 0 && hex(s.charAt(i + 2)) >= 0) {
-                bytes.write(hex(s.charAt(i + 1)) << 4 | hex(s.charAt(i + 2)));
-                i += 3;
-            }
-            if (bytes.size() > 0) {
-                sb.append(bytes.toString(StandardCharsets.UTF_8));
-                bytes.reset();
-            }
-            if (i < s.length()) {
-                sb.append(s.charAt(i++));
-            }
-        }
-        return sb.toString();
-    }
-
-    private static int hex(char c) {
-        return Character.digit(c, 16);
+        return PercentEncoding.decode(s);
     }
 
 }
