@@ -30,6 +30,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import io.github.ghosthack.turismo.Resolver;
 import io.github.ghosthack.turismo.Routes;
 import io.github.ghosthack.turismo.util.ClassForName.ClassForNameException;
+import io.github.ghosthack.turismo.util.Validation;
 
 
 /**
@@ -73,8 +74,10 @@ public class Servlet extends HttpServlet {
     /**
      * Resolves and runs the action for the request. A request without a
      * declared charset has its parameters decoded as UTF-8, like the
-     * embedded server. No matching action gets {@code 404}; an exception
-     * thrown by the action is logged and answered with {@code 500} (or
+     * embedded server, and every response carries
+     * {@code X-Content-Type-Options: nosniff}. No matching action gets
+     * {@code 404}; an exception or error thrown by the action is logged
+     * and answered with {@code 500} (or
      * rethrown as a {@link ServletException} if the response is already
      * committed), so container error pages never show its stack trace.
      * A request forwarded back into this servlet (see
@@ -88,6 +91,9 @@ public class Servlet extends HttpServlet {
         if (req.getCharacterEncoding() == null) {
             req.setCharacterEncoding(DEFAULT_CHARSET);
         }
+        // As on the embedded server: browsers must not guess the type of
+        // a response, which can turn echoed request data into HTML
+        res.setHeader("X-Content-Type-Options", "nosniff");
         final Env previous = Env.get();
         Env.create(req, res, context);
         try {
@@ -99,9 +105,13 @@ public class Servlet extends HttpServlet {
                     return;
                 }
                 action.run();
-            } catch (RuntimeException e) {
+            } catch (RuntimeException | Error e) {
+                // Errors too, as on the embedded server, so the container's
+                // error page never shows the stack trace
                 LOG.log(System.Logger.Level.ERROR, "Unhandled error in "
-                        + req.getMethod() + " " + req.getRequestURI(), e);
+                        + Validation.escapeControlChars(req.getMethod()) + " "
+                        + Validation.escapeControlChars(req.getRequestURI()),
+                        e);
                 if (res.isCommitted()) {
                     throw new ServletException(e);
                 }

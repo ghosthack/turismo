@@ -422,7 +422,10 @@ public class ServerTest {
     // ---------------------------------------------------------------
 
     private Server startServer() throws IOException {
-        Server server = new Server(0);
+        // Loopback only: with a wildcard bind, macOS can hand out a port
+        // that another process holds on 127.0.0.1, and that process then
+        // answers the test's requests
+        Server server = new Server(Turismo.app(), "127.0.0.1", 0);
         server.start();
         return server;
     }

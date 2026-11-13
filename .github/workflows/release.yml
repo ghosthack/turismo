@@ -19,6 +19,11 @@ jobs:
   release:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    # Add required reviewers to this environment (Settings > Environments >
+    # release) so a pushed tag waits for approval before publishing. If you
+    # restrict its deployment branches, allow the v* tags too, or tag
+    # pushes can't deploy
+    environment: release
     permissions:
       contents: write # create the GitHub release
 

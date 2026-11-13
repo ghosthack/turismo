@@ -116,6 +116,24 @@ public interface Context {
     void header(String name, String value);
 
     /**
+     * Adds a response header, keeping any values already set for the
+     * name, so that it is sent once per value (as {@code Set-Cookie}
+     * needs). The default throws, since a transport that only implements
+     * {@link #header(String, String)} would silently replace the earlier
+     * value.
+     *
+     * @param name  the header name
+     * @param value the header value
+     * @throws UnsupportedOperationException if the transport doesn't
+     *         support repeated headers
+     */
+    default void addHeader(String name, String value) {
+        throw new UnsupportedOperationException(
+                "Repeated response headers are not supported by "
+                + getClass().getName());
+    }
+
+    /**
      * Writes a string to the response body using UTF-8 encoding.
      *
      * @param text the text to write

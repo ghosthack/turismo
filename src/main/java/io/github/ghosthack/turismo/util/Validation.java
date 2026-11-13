@@ -74,6 +74,34 @@ public final class Validation {
         return true;
     }
 
+    /**
+     * Escapes control characters (below {@code 0x20}, and {@code 0x7F})
+     * as {@code \\uXXXX}, so request data written to a log can't start a
+     * new line and forge an entry.
+     *
+     * @param s the text to escape
+     * @return the escaped text, or {@code "null"} if s is null
+     */
+    public static String escapeControlChars(String s) {
+        if (s == null) {
+            return "null";
+        }
+        StringBuilder sb = null;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c < 0x20 || c == 0x7F) {
+                if (sb == null) {
+                    sb = new StringBuilder(s.length() + 8);
+                    sb.append(s, 0, i);
+                }
+                sb.append(String.format("\\u%04x", (int) c));
+            } else if (sb != null) {
+                sb.append(c);
+            }
+        }
+        return sb != null ? sb.toString() : s;
+    }
+
     private static boolean hasControlChar(String s) {
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);

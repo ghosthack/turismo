@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import io.github.ghosthack.turismo.App;
 import io.github.ghosthack.turismo.Context;
 import io.github.ghosthack.turismo.Turismo;
+import io.github.ghosthack.turismo.util.Validation;
 
 /**
  * Response handling of the embedded server: status validation, HEAD
@@ -36,7 +37,8 @@ public class ServerResponseTest {
 
     @BeforeEach
     public void setUp() throws IOException {
-        server = new Server(0);
+        // Loopback only, see ServerTest.startServer
+        server = new Server(Turismo.app(), "127.0.0.1", 0);
         server.start();
         base = "http://localhost:" + server.port();
     }
@@ -149,22 +151,96 @@ public class ServerResponseTest {
     }
 
     @Test
-    public void testErrorAfterStreamingIsLoggedAndEndsResponse()
+    public void testErrorAfterStreamingIsLoggedAndAbortsResponse()
             throws Exception {
         List<LogRecord> records = captureLog(() -> {
             Turismo.get("/partial", () -> {
-                Turismo.stream();
-                Turismo.print("partial");
-                throw new IllegalStateException("fail midway");
+                // Leaving the try block closes the stream, which must
+                // not end the body as if it were complete
+                try (OutputStream out = Turismo.stream()) {
+                    Turismo.print("partial");
+                    out.flush();
+                    throw new IllegalStateException("fail midway");
+                } catch (IOException e) {
+                    throw new java.io.UncheckedIOException(e);
+                }
             });
             HttpURLConnection conn = open("/partial");
             // Status was already sent, so it can't become a 500
             assertEquals(200, conn.getResponseCode());
-            assertEquals("partial", read(conn.getInputStream()));
+            // The body never ends: the client must not take the partial
+            // body for a complete response
+            assertThrows(IOException.class,
+                    () -> read(conn.getInputStream()));
             conn.disconnect();
         });
         assertEquals(1, records.size());
         assertEquals("fail midway", records.get(0).getThrown().getMessage());
+    }
+
+    @Test
+    public void testClientDisconnectWhileStreamingIsNotLoggedAsError()
+            throws Exception {
+        java.util.concurrent.CountDownLatch done =
+                new java.util.concurrent.CountDownLatch(1);
+        List<LogRecord> records = captureLog(() -> {
+            Turismo.get("/endless", () -> {
+                try {
+                    OutputStream out = Turismo.stream();
+                    byte[] chunk = new byte[8192];
+                    for (int i = 0; i < 100_000; i++) {
+                        out.write(chunk);
+                    }
+                } catch (IOException e) {
+                    throw new java.io.UncheckedIOException(e);
+                } finally {
+                    done.countDown();
+                }
+            });
+            try (java.net.Socket socket = new java.net.Socket(
+                    "localhost", server.port())) {
+                socket.getOutputStream().write(
+                        "GET /endless HTTP/1.1\r\nHost: x\r\n\r\n"
+                        .getBytes(StandardCharsets.US_ASCII));
+                socket.getOutputStream().flush();
+                assertTrue(socket.getInputStream().read() >= 0);
+            }
+            assertTrue(done.await(10, java.util.concurrent.TimeUnit.SECONDS));
+            // Let the server log the handler's failure, if it is going to
+            Thread.sleep(200);
+        });
+        assertEquals(List.of(), records);
+    }
+
+    @Test
+    public void testClosingTheStreamStillEndsTheResponseNormally()
+            throws Exception {
+        Turismo.get("/closed", () -> {
+            try (OutputStream out = Turismo.stream()) {
+                out.write("done".getBytes(StandardCharsets.UTF_8));
+            } catch (IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
+        });
+        HttpURLConnection conn = open("/closed");
+        assertEquals(200, conn.getResponseCode());
+        assertEquals("done", read(conn.getInputStream()));
+        conn.disconnect();
+    }
+
+    @Test
+    public void testStreamingDropsContentLength() throws Exception {
+        Turismo.get("/len", () -> {
+            Turismo.header("Content-Length", "5");
+            Turismo.stream();
+            Turismo.print("hello");
+        });
+        HttpURLConnection conn = open("/len");
+        assertEquals(200, conn.getResponseCode());
+        assertEquals("chunked", conn.getHeaderField("Transfer-Encoding"));
+        assertNull(conn.getHeaderField("Content-Length"));
+        assertEquals("hello", read(conn.getInputStream()));
+        conn.disconnect();
     }
 
     @Test
@@ -187,6 +263,98 @@ public class ServerResponseTest {
         app.get("/x", () -> seen.add(threw(Turismo::stream)));
         app.handle(new StubContext("GET", "/x"));
         assertEquals(List.of("UnsupportedOperationException"), seen);
+    }
+
+    @Test
+    public void testRequestErrorAfterStreamingLogsTheCause()
+            throws Exception {
+        List<LogRecord> records = captureLog(() -> {
+            Turismo.get("/partial", () -> {
+                Turismo.stream();
+                Turismo.print("partial");
+                Turismo.redirectLocal("//evil.example");
+            });
+            HttpURLConnection conn = open("/partial");
+            assertEquals(200, conn.getResponseCode());
+            assertThrows(IOException.class,
+                    () -> read(conn.getInputStream()));
+            conn.disconnect();
+        });
+        assertEquals(1, records.size());
+        Throwable thrown = records.get(0).getThrown();
+        // The request error itself, not the failed attempt to answer it
+        assertEquals("Redirect target must be a local path",
+                thrown.getMessage());
+    }
+
+    // ---------------------------------------------------------------
+    // Headers
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testAddHeaderSendsEachValue() throws Exception {
+        Turismo.get("/cookies", () -> {
+            Turismo.addHeader("Set-Cookie", "a=1");
+            Turismo.addHeader("Set-Cookie", "b=2");
+            Turismo.header("X-Single", "first");
+            Turismo.header("X-Single", "second");
+            Turismo.print("ok");
+        });
+        HttpURLConnection conn = open("/cookies");
+        assertEquals(200, conn.getResponseCode());
+        List<String> cookies = headerValues(conn, "Set-Cookie");
+        assertEquals(2, cookies.size());
+        assertTrue(cookies.containsAll(List.of("a=1", "b=2")));
+        assertEquals(List.of("second"), headerValues(conn, "X-Single"));
+        conn.disconnect();
+    }
+
+    @Test
+    public void testAddHeaderAfterStreamingThrows() throws Exception {
+        List<String> seen = Collections.synchronizedList(new ArrayList<>());
+        Turismo.get("/late", () -> {
+            Turismo.stream();
+            seen.add(threw(() -> Turismo.addHeader("Set-Cookie", "a=1")));
+        });
+        HttpURLConnection conn = open("/late");
+        assertEquals(200, conn.getResponseCode());
+        // The status arrives as soon as stream() is called: wait for the
+        // end of the body, when the handler has finished
+        read(conn.getInputStream());
+        conn.disconnect();
+        assertEquals(List.of("IllegalStateException"), seen);
+    }
+
+    @Test
+    public void testAddHeaderUnsupportedByCustomContext() {
+        App app = new App();
+        List<String> seen = new ArrayList<>();
+        app.get("/x", () -> seen.add(
+                threw(() -> Turismo.addHeader("Set-Cookie", "a=1"))));
+        app.handle(new StubContext("GET", "/x"));
+        assertEquals(List.of("UnsupportedOperationException"), seen);
+    }
+
+    // ---------------------------------------------------------------
+    // Semicolons (;v=1)
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testSemicolonIsPartOfTheSegment() throws Exception {
+        Turismo.get("/users/:id", () -> Turismo.print("id=", Turismo.param("id")));
+        Turismo.get("/admin/secret", "SECRET");
+
+        HttpURLConnection conn = open("/users/42;v=1");
+        assertEquals("id=42;v=1", read(conn.getInputStream()));
+        conn.disconnect();
+
+        // No second spelling of a route that a proxy rule wouldn't catch
+        for (String path : new String[] {"/admin;x/secret",
+                "/admin;/secret", "/admin/secret;"}) {
+            conn = open(path);
+            assertEquals(404, conn.getResponseCode(), path);
+            conn.disconnect();
+        }
     }
 
     // ---------------------------------------------------------------
@@ -267,9 +435,10 @@ public class ServerResponseTest {
 
     @Test
     public void testEscapeControlChars() {
-        assertEquals("/a", Server.escape("/a"));
-        assertEquals("/a\\u000ab\\u000d\\u007f", Server.escape("/a\nb\r\u007f"));
-        assertEquals("null", Server.escape(null));
+        assertEquals("/a", Validation.escapeControlChars("/a"));
+        assertEquals("/a\\u000ab\\u000d\\u007f",
+                Validation.escapeControlChars("/a\nb\r\u007f"));
+        assertEquals("null", Validation.escapeControlChars(null));
     }
 
     // ---------------------------------------------------------------
@@ -316,6 +485,18 @@ public class ServerResponseTest {
                 URI.create(base + path).toURL().openConnection();
         conn.setInstanceFollowRedirects(false);
         return conn;
+    }
+
+    /** All values of a response header; the JDK server recases names. */
+    private static List<String> headerValues(HttpURLConnection conn,
+            String name) {
+        List<String> values = new ArrayList<>();
+        conn.getHeaderFields().forEach((k, v) -> {
+            if (name.equalsIgnoreCase(k)) {
+                values.addAll(v);
+            }
+        });
+        return values;
     }
 
     private static String read(InputStream in) throws IOException {
