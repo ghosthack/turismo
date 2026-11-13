@@ -5,7 +5,7 @@
 
   <groupId>io.github.ghosthack</groupId>
   <artifactId>turismo</artifactId>
-  <version>6.0.0</version>
+  <version>6.1.0</version>
   <packaging>jar</packaging>
 
   <name>turismo</name>
@@ -39,6 +39,18 @@
           <encoding>${project.build.sourceEncoding}</encoding>
           <release>21</release>
           <parameters>true</parameters>
+        </configuration>
+      </plugin>
+      <plugin>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.5.1</version>
+        <configuration>
+          <archive>
+            <manifestEntries>
+              <!-- Stable name on the module path (no module-info yet) -->
+              <Automatic-Module-Name>io.github.ghosthack.turismo</Automatic-Module-Name>
+            </manifestEntries>
+          </archive>
         </configuration>
       </plugin>
       <plugin>

@@ -17,6 +17,7 @@
 package io.github.ghosthack.turismo.http;
 
 import java.io.ByteArrayOutputStream;
+import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -77,6 +78,8 @@ public class HttpContext implements Context {
     private OutputStream stream;
     /** Whether the handler asked for the raw body stream. */
     private boolean rawOutput;
+    /** Whether writing the streaming body to the client failed. */
+    private boolean writeFailed;
     private Map<String, List<String>> queryParams;
 
     /**
@@ -158,6 +161,18 @@ public class HttpContext implements Context {
         exchange.getResponseHeaders().set(name, value);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @throws IllegalStateException if the response is already
+     *         {@linkplain #stream() streaming}
+     */
+    @Override
+    public void addHeader(String name, String value) {
+        checkNotCommitted();
+        exchange.getResponseHeaders().add(name, value);
+    }
+
     @Override
     public void print(String text) {
         byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
@@ -195,9 +210,16 @@ public class HttpContext implements Context {
      * ({@link #status(int)} and {@link #header(String, String)} throw
      * {@link IllegalStateException}), and an error in the handler can't
      * be turned into a 500 response: the server logs it and closes the
-     * connection. Calling this again returns the same stream. For HEAD
-     * requests and statuses without a body, the returned stream
-     * discards what is written.
+     * connection without ending the chunked body, so the client sees a
+     * failed transfer rather than a complete, shorter response. Calling
+     * this again returns the same stream. For HEAD requests and statuses
+     * without a body, the returned stream discards what is written.
+     *
+     * <p>Closing the returned stream only flushes it: the response ends
+     * when the handler returns, so a {@code try}-with-resources block
+     * that is left by an exception doesn't mark a partial body as
+     * complete. A {@code Content-Length} header set by the handler is
+     * dropped, since a chunked response must not carry one.
      *
      * @return the response body stream
      * @throws IOException if the headers can't be sent
@@ -207,8 +229,11 @@ public class HttpContext implements Context {
             rawOutput = true;
             defaultHeaders(allowsBody());
             if (mayHaveBody()) {
+                // The body is chunked, and a message with both framings
+                // is invalid: proxies reject it or disagree on its end
+                exchange.getResponseHeaders().remove("Content-Length");
                 exchange.sendResponseHeaders(statusCode, 0);
-                stream = exchange.getResponseBody();
+                stream = new BodyStream(exchange.getResponseBody());
                 buffer.writeTo(stream);
             } else {
                 exchange.sendResponseHeaders(statusCode, -1);
@@ -242,7 +267,8 @@ public class HttpContext implements Context {
     public void finish() throws IOException {
         if (stream != null) {
             try {
-                stream.close();
+                // Not `stream`, whose close() only flushes
+                exchange.getResponseBody().close();
             } finally {
                 exchange.close();
             }
@@ -299,6 +325,74 @@ public class HttpContext implements Context {
         }
         if (!headers.containsKey("X-Content-Type-Options")) {
             headers.set("X-Content-Type-Options", "nosniff");
+        }
+    }
+
+    /**
+     * The streaming response body handed to handlers. Closing it flushes
+     * what was written but leaves the chunked body open, so that only
+     * {@link #finish()} (a handler that returned normally) ends it.
+     */
+    private final class BodyStream extends FilterOutputStream {
+        BodyStream(OutputStream out) {
+            super(out);
+        }
+
+        @Override
+        public void write(int b) throws IOException {
+            try {
+                out.write(b);
+            } catch (IOException e) {
+                writeFailed = true;
+                throw e;
+            }
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+            try {
+                // FilterOutputStream would write byte by byte
+                out.write(b, off, len);
+            } catch (IOException e) {
+                writeFailed = true;
+                throw e;
+            }
+        }
+
+        @Override
+        public void flush() throws IOException {
+            try {
+                out.flush();
+            } catch (IOException e) {
+                writeFailed = true;
+                throw e;
+            }
+        }
+
+        @Override
+        public void close() throws IOException {
+            flush();
+        }
+    }
+
+    /**
+     * Whether a write to the {@linkplain #stream() streaming} response
+     * failed, which means the client went away: the handler error that
+     * follows is not a fault of the application.
+     */
+    boolean writeFailed() {
+        return writeFailed;
+    }
+
+    /**
+     * Sends what a {@linkplain #stream() streaming} handler wrote so far,
+     * before the server drops the connection of a failed response.
+     */
+    void flushStream() {
+        try {
+            stream.flush();
+        } catch (IOException ignored) {
+            // Client may have disconnected
         }
     }
 

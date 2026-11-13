@@ -29,6 +29,7 @@ import com.sun.net.httpserver.HttpServer;
 
 import io.github.ghosthack.turismo.App;
 import io.github.ghosthack.turismo.Turismo;
+import io.github.ghosthack.turismo.util.Validation;
 
 /**
  * Embedded HTTP server backed by the JDK's built-in {@link HttpServer}.
@@ -184,6 +185,7 @@ public class Server {
 
     private void handle(HttpExchange exchange) {
         HttpContext ctx = new HttpContext(exchange);
+        boolean aborted = false;
         try {
             try {
                 app.handle(ctx);
@@ -191,43 +193,38 @@ public class Server {
                 // Catch Errors too, otherwise the client gets no response.
                 // Log the raw path, escaped: a decoded %0A could forge
                 // log lines
-                LOG.log(System.Logger.Level.ERROR,
-                        "Unhandled error in " + escape(ctx.method()) + " "
-                        + escape(ctx.rawPath()), t);
-                if (!ctx.isStreaming()) {
-                    ctx.reset();
-                    ctx.status(500);
-                    ctx.print("Internal Server Error");
+                // A failed write to a streaming response is the client
+                // going away mid-download, not an application error
+                LOG.log(ctx.writeFailed() ? System.Logger.Level.DEBUG
+                        : System.Logger.Level.ERROR,
+                        (ctx.writeFailed() ? "Client disconnected during "
+                        : "Unhandled error in ") + Validation.escapeControlChars(ctx.method()) + " "
+                        + Validation.escapeControlChars(ctx.rawPath()), t);
+                if (ctx.isStreaming()) {
+                    // Status and headers are already sent, so it can't
+                    // become a 500. Ending the chunked body normally
+                    // would pass the partial body off as a complete
+                    // response; leaving the exchange open and throwing
+                    // makes the JDK server drop the connection instead,
+                    // which the client sees as a failed transfer
+                    aborted = true;
+                    // The client still gets what the handler wrote
+                    ctx.flushStream();
+                    throw new IllegalStateException(
+                            "Response aborted: handler failed while"
+                            + " streaming", t);
                 }
-                // Streaming: status and headers are already sent, so
-                // just end the response below
+                ctx.reset();
+                ctx.status(500);
+                ctx.print("Internal Server Error");
             }
             ctx.finish();
         } catch (IOException ignored) {
             // Client may have disconnected
         } finally {
-            exchange.close();
-        }
-    }
-
-    /** Escapes control characters so request data can't break log lines. */
-    static String escape(String s) {
-        if (s == null) {
-            return "null";
-        }
-        StringBuilder sb = null;
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            if (c < 0x20 || c == 0x7F) {
-                if (sb == null) {
-                    sb = new StringBuilder(s.length() + 8);
-                    sb.append(s, 0, i);
-                }
-                sb.append(String.format("\\u%04x", (int) c));
-            } else if (sb != null) {
-                sb.append(c);
+            if (!aborted) {
+                exchange.close();
             }
         }
-        return sb != null ? sb.toString() : s;
     }
 }

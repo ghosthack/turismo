@@ -33,6 +33,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import io.github.ghosthack.turismo.annotation.DELETE;
 import io.github.ghosthack.turismo.annotation.GET;
+import io.github.ghosthack.turismo.annotation.HEAD;
+import io.github.ghosthack.turismo.annotation.OPTIONS;
 import io.github.ghosthack.turismo.annotation.PATCH;
 import io.github.ghosthack.turismo.annotation.POST;
 import io.github.ghosthack.turismo.annotation.PUT;
@@ -304,8 +306,9 @@ public class App {
     /**
      * Registers an annotated controller instance. Scans the instance's
      * class for methods annotated with {@link GET @GET}, {@link POST @POST},
-     * {@link PUT @PUT}, {@link DELETE @DELETE}, or {@link PATCH @PATCH},
-     * and registers each as a route. Annotated methods declared in
+     * {@link PUT @PUT}, {@link DELETE @DELETE}, {@link PATCH @PATCH},
+     * {@link HEAD @HEAD} or {@link OPTIONS @OPTIONS}, and registers each
+     * as a route. Annotated methods declared in
      * superclasses are included; an annotated override in a subclass
      * replaces the superclass's route (an overload, with other parameter
      * types, does not). Either every route of the controller is
@@ -422,6 +425,8 @@ public class App {
         if (a instanceof PUT) return "PUT";
         if (a instanceof DELETE) return "DELETE";
         if (a instanceof PATCH) return "PATCH";
+        if (a instanceof HEAD) return "HEAD";
+        if (a instanceof OPTIONS) return "OPTIONS";
         return null;
     }
 
@@ -431,6 +436,8 @@ public class App {
         if (a instanceof PUT p) return p.value();
         if (a instanceof DELETE d) return d.value();
         if (a instanceof PATCH p) return p.value();
+        if (a instanceof HEAD h) return h.value();
+        if (a instanceof OPTIONS o) return o.value();
         throw new IllegalArgumentException("Not a route annotation: " + a);
     }
 
@@ -552,8 +559,15 @@ public class App {
             match.action.run();
         } catch (RequestException e) {
             // Replace anything the handler wrote before the error
-            ctx.reset();
-            ctx.status(e.status());
+            try {
+                ctx.reset();
+                ctx.status(e.status());
+            } catch (IllegalStateException committed) {
+                // Status and headers were already sent (streaming): it
+                // can't become an error response, so let the transport
+                // log the original error and end the response
+                throw e;
+            }
             ctx.print(e.getMessage());
         } finally {
             Turismo.restore(previous);

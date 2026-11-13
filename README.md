@@ -10,14 +10,14 @@ A lightweight Sinatra/Express-style Java web framework.
 <dependency>
     <groupId>io.github.ghosthack</groupId>
     <artifactId>turismo</artifactId>
-    <version>6.0.0</version>
+    <version>6.1.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'io.github.ghosthack:turismo:6.0.0'
+implementation 'io.github.ghosthack:turismo:6.1.0'
 ```
 
 Requires Java 21+. (3.x supports Java 17.) See [Upgrading to 6.0](#upgrading-to-60) and [Upgrading to 5.0](#upgrading-to-50) for breaking changes.
@@ -72,6 +72,12 @@ segment: `/files/a%2Fb` matches `/files/:name` with `name` = `a/b`. For the
 same reason `/admin%2Fsecret` does not match an exact `/admin/secret` route.
 
 Paths must start with `/`.
+
+A `;` is an ordinary character in a segment: `/users/42;v=1` matches
+`/users/:id` with `id` = `42;v=1`, and `/admin;x/secret` doesn't match an
+`/admin/secret` route, so a route has no second spelling that a proxy rule
+might miss. (In a servlet deployment the container strips these path
+parameters before turismo sees the path.)
 
 Every path segment counts, empty ones included: a trailing slash or a
 doubled slash is part of the path, for exact and pattern routes alike.
@@ -165,7 +171,9 @@ delete("/users/:id", () -> print("Deleted ", param("id")));
 status(201);
 
 // Set headers
-header("X-Custom", "value");
+header("X-Custom", "value");         // replaces an earlier X-Custom
+addHeader("Set-Cookie", "a=1");      // adds one more, for repeated headers
+addHeader("Set-Cookie", "b=2");
 type("application/json");
 
 // Write body
@@ -202,8 +210,9 @@ would have, without the body.
 
 ### Redirects and open redirects
 
-`redirect()` rejects control characters (CR/LF header injection, TAB) but
-otherwise goes wherever it is told. Never pass it a target from the request:
+`redirect()` takes a 3xx status (anything else throws
+`IllegalArgumentException`) and rejects control characters (CR/LF header
+injection, TAB), but otherwise goes wherever it is told. Never pass it a target from the request:
 `redirect(param("next"))` lets anyone craft a link to your site that sends
 users to `https://evil.com` or `//evil.com`. Use `redirectLocal()` instead,
 which accepts only a path on the same site (a single leading `/`; not
@@ -242,7 +251,11 @@ get("/export.csv", () -> {
 
 After `stream()`, `status()` and `header()` throw `IllegalStateException`. An
 exception thrown after streaming has started can't be turned into a 500: it is
-logged and the response ends, so the client may receive a truncated body.
+logged and the connection is closed without ending the chunked body, so the
+client sees a failed transfer instead of a complete but shorter response.
+Closing the stream only flushes it (the response ends when the handler
+returns), and a `Content-Length` set before `stream()` is dropped, since a
+chunked response can't carry one.
 `stream()` is only available on the embedded server; with another transport
 (a custom `Context` passed to `App.handle`) it throws
 `UnsupportedOperationException`.
@@ -301,6 +314,9 @@ public class UserController {
     }
 }
 ```
+
+`@HEAD` and `@OPTIONS` are available too, for when the automatic HEAD and
+OPTIONS answers (see [HTTP methods](#http-methods)) aren't what you want.
 
 Register the controller and start the server:
 
@@ -474,11 +490,14 @@ turismo also supports deployment in any Jakarta EE 10 servlet container
 
 - HEAD requests are served by GET routes, and wrong-method requests get `405`
   with an `Allow` header.
-- An exception thrown by an action is logged through `System.Logger` and
-  answered with `500` (the container's error page never shows the stack
-  trace); a request with no matching route gets `404`.
+- An exception or error thrown by an action is logged through
+  `System.Logger` and answered with `500` (the container's error page
+  never shows the stack trace); a request with no matching route gets
+  `404`.
 - Form and query parameters are decoded as UTF-8 when the request declares
   no charset.
+- Every response carries `X-Content-Type-Options: nosniff`, including
+  JSPs and files reached through `forward()` or an alias.
 - An encoded slash is not a path separator: `/admin%2Fsecret` doesn't match
   an `/admin/secret` route, while `/files/:name` matches `/files/a%2Fb` with
   `name` = `a/b`. (Most containers reject `%2F` in paths by default anyway.)
@@ -734,12 +753,6 @@ browsers encode them.
 - **Removed internals**: the package-private `App.percentDecode` moved to
   `util.PercentEncoding.decode`.
 
-New in 6.0: `start(host, port)` ([Binding to one
-interface](#binding-to-one-interface)) and per-endpoint multipart limits
-(`MultipartParser.setLimits`, `wrapAndParse(req, charset, maxContentSize,
-maxParts)`, and the `max-content-size`/`max-parts` init parameters of
-`MultipartFilter`).
-
 ## Upgrading to 5.0
 
 5.0 changes these defaults and behaviors from 4.x:
@@ -796,14 +809,6 @@ maxParts)`, and the `max-content-size`/`max-parts` init parameters of
 - **Form after body**: reading form fields after taking the raw body
   answers `400` instead of throwing `IllegalStateException`.
 
-New in 5.0: `App` instances ([Multiple apps](#multiple-apps)), controller
-method arguments ([Method arguments](#method-arguments)), form bodies
-([Form bodies](#form-bodies)), graceful
-`stop(Duration)`, logging of handler errors, and JSON support for records,
-enums, `Character` and all array types, `stream()` responses,
-`redirectLocal()`, multiple files per multipart field (`getFiles`) and
-automatic `OPTIONS`.
-
 ## Releasing
 
 1. Set the release version in `pom.xml` (remove `-SNAPSHOT`) and merge it to `master` via PR
@@ -812,9 +817,11 @@ automatic `OPTIONS`.
    git tag v5.1.0
    git push origin v5.1.0
    ```
-3. The Release workflow checks that the tag matches the `pom.xml` version and is on
-   `master`, uploads the signed artifacts to Maven Central, waits until Central
-   has published them, and then publishes the GitHub release with generated notes
+3. The Release workflow waits for approval in the `release` environment (if
+   required reviewers are set on it), checks that the tag matches the
+   `pom.xml` version and is on `master`, uploads the signed artifacts to
+   Maven Central, waits until Central has published them, and then publishes
+   the GitHub release with generated notes
 
 Pushing the tag is the point of no return: Central releases cannot be withdrawn
 or replaced. Run the bundle dry run below first if in doubt. If the workflow

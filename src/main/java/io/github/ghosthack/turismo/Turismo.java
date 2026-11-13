@@ -32,6 +32,8 @@ import java.util.Map;
 
 import io.github.ghosthack.turismo.annotation.DELETE;
 import io.github.ghosthack.turismo.annotation.GET;
+import io.github.ghosthack.turismo.annotation.HEAD;
+import io.github.ghosthack.turismo.annotation.OPTIONS;
 import io.github.ghosthack.turismo.annotation.PATCH;
 import io.github.ghosthack.turismo.annotation.POST;
 import io.github.ghosthack.turismo.annotation.PUT;
@@ -248,8 +250,9 @@ public final class Turismo {
     /**
      * Registers an annotated controller instance. Scans the instance's
      * class for methods annotated with {@link GET @GET}, {@link POST @POST},
-     * {@link PUT @PUT}, {@link DELETE @DELETE}, or {@link PATCH @PATCH},
-     * and registers each as a route. Annotated methods declared in
+     * {@link PUT @PUT}, {@link DELETE @DELETE}, {@link PATCH @PATCH},
+     * {@link HEAD @HEAD} or {@link OPTIONS @OPTIONS}, and registers each
+     * as a route. Annotated methods declared in
      * superclasses are included; an annotated override in a subclass
      * replaces the superclass's route. Method arguments are bound from
      * the request as described in {@link App#controller(Object)}.
@@ -475,13 +478,33 @@ public final class Turismo {
     }
 
     /**
-     * Sets a response header.
+     * Sets a response header, replacing any value already set for the
+     * name. Use {@link #addHeader(String, String)} for a header that is
+     * sent more than once, such as {@code Set-Cookie}.
      *
      * @param name  the header name
      * @param value the header value
      */
     public static void header(String name, String value) {
         context().header(name, value);
+    }
+
+    /**
+     * Adds a response header, keeping any values already set for the
+     * name, so it is sent once per value:
+     *
+     * <pre>{@code
+     * addHeader("Set-Cookie", "session=abc; HttpOnly; Secure");
+     * addHeader("Set-Cookie", "theme=dark");
+     * }</pre>
+     *
+     * @param name  the header name
+     * @param value the header value
+     * @throws UnsupportedOperationException with a custom {@link Context}
+     *         that doesn't implement {@link Context#addHeader}
+     */
+    public static void addHeader(String name, String value) {
+        context().addHeader(name, value);
     }
 
     /**
@@ -761,12 +784,17 @@ public final class Turismo {
      * Sends a redirect with the given status code and URL. The URL may
      * point anywhere; see {@link #redirectLocal(int, String)}.
      *
-     * @param code the HTTP status code (e.g. 301, 302, 307)
+     * @param code the HTTP status code, 300 to 399 (e.g. 301, 302, 307)
      * @param url  the redirect target
-     * @throws IllegalArgumentException if the URL is null or contains
-     *         a control character (such as CR/LF)
+     * @throws IllegalArgumentException if the code is not a 3xx status,
+     *         or the URL is null or contains a control character (such
+     *         as CR/LF)
      */
     public static void redirect(int code, String url) {
+        if (code < 300 || code > 399) {
+            throw new IllegalArgumentException(
+                    "Redirect status must be 3xx, got " + code);
+        }
         validateLocation(url);
         status(code);
         header("Location", url);
@@ -793,9 +821,10 @@ public final class Turismo {
      * Sends a redirect with the given status code to a path on this
      * site, as described in {@link #redirectLocal(String)}.
      *
-     * @param code the HTTP status code (e.g. 302, 303, 307)
+     * @param code the HTTP status code, 300 to 399 (e.g. 302, 303, 307)
      * @param path the redirect target, a path starting with a single
      *        {@code /}
+     * @throws IllegalArgumentException if the code is not a 3xx status
      */
     public static void redirectLocal(int code, String path) {
         if (!Validation.isLocalPath(path)) {

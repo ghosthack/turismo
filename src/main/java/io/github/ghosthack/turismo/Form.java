@@ -191,6 +191,9 @@ final class Form {
         @Override public void header(String name, String value) {
             ctx.header(name, value);
         }
+        @Override public void addHeader(String name, String value) {
+            ctx.addHeader(name, value);
+        }
         @Override public void print(String text) { ctx.print(text); }
         @Override public OutputStream output() { return ctx.output(); }
         @Override public void reset() { ctx.reset(); }

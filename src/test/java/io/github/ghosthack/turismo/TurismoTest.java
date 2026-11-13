@@ -19,6 +19,8 @@ import org.junit.jupiter.api.Test;
 
 import io.github.ghosthack.turismo.annotation.DELETE;
 import io.github.ghosthack.turismo.annotation.GET;
+import io.github.ghosthack.turismo.annotation.HEAD;
+import io.github.ghosthack.turismo.annotation.OPTIONS;
 import io.github.ghosthack.turismo.annotation.PATCH;
 import io.github.ghosthack.turismo.annotation.Param;
 import io.github.ghosthack.turismo.annotation.POST;
@@ -256,6 +258,17 @@ public class TurismoTest {
         Turismo.handle(ctx);
         assertEquals(302, ctx.statusCode);
         assertEquals("/new", ctx.responseHeaders.get("Location"));
+    }
+
+    @Test
+    public void testRedirectRejectsNonRedirectStatus() {
+        for (int code : new int[] {200, 299, 400, 500}) {
+            assertThrows(IllegalArgumentException.class,
+                    () -> Turismo.redirect(code, "/new"), "status " + code);
+            assertThrows(IllegalArgumentException.class,
+                    () -> Turismo.redirectLocal(code, "/new"),
+                    "status " + code);
+        }
     }
 
     @Test
@@ -600,6 +613,20 @@ public class TurismoTest {
 
         Turismo.handle(ctx);
         assertEquals("patched", ctx.printed.toString());
+    }
+
+    @Test
+    public void testControllerHeadAndOptions() {
+        Turismo.controller(new HeadOptionsController());
+
+        MockContext head = new MockContext("HEAD", "/ctrl/info");
+        Turismo.handle(head);
+        assertEquals("head", head.responseHeaders.get("X-Handler"));
+
+        MockContext options = new MockContext("OPTIONS", "/ctrl/info");
+        Turismo.handle(options);
+        assertEquals(204, options.statusCode);
+        assertEquals("options", options.responseHeaders.get("X-Handler"));
     }
 
     @Test
@@ -1310,6 +1337,19 @@ public class TurismoTest {
         @Override
         void base() {
             Turismo.print("plain override");
+        }
+    }
+
+    static class HeadOptionsController {
+        @HEAD("/ctrl/info")
+        void head() {
+            Turismo.header("X-Handler", "head");
+        }
+
+        @OPTIONS("/ctrl/info")
+        void options() {
+            Turismo.status(204);
+            Turismo.header("X-Handler", "options");
         }
     }
 

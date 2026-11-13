@@ -64,6 +64,12 @@ public class ServletServiceTest {
                         throw new IllegalStateException("boom");
                     }
                 });
+                get("/error", new Action() {
+                    @Override
+                    public void run() {
+                        throw new AssertionError("fatal");
+                    }
+                });
                 get("/action-fail", new Action() {
                     @Override
                     public void run() {
@@ -145,6 +151,42 @@ public class ServletServiceTest {
     }
 
     @Test
+    public void testErrorLogEscapesControlCharacters() throws Exception {
+        java.util.logging.Logger logger = java.util.logging.Logger
+                .getLogger(Servlet.class.getName());
+        List<String> messages = new ArrayList<>();
+        java.util.logging.Handler handler = new java.util.logging.Handler() {
+            @Override
+            public void publish(java.util.logging.LogRecord r) {
+                messages.add(r.getMessage());
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() {
+            }
+        };
+        boolean parent = logger.getUseParentHandlers();
+        logger.addHandler(handler);
+        logger.setUseParentHandlers(false);
+        try {
+            HttpServletRequest req = request("GET", "/fail");
+            when(req.getRequestURI())
+                    .thenReturn("/fail\n2026-01-01 ERROR forged");
+
+            servlet.service(req, response());
+        } finally {
+            logger.removeHandler(handler);
+            logger.setUseParentHandlers(parent);
+        }
+        assertEquals(List.of("Unhandled error in GET "
+                + "/fail\\u000a2026-01-01 ERROR forged"), messages);
+    }
+
+    @Test
     public void testExceptionIs500() throws Exception {
         HttpServletResponse res = response();
 
@@ -152,6 +194,25 @@ public class ServletServiceTest {
 
         verify(res).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
         assertNull(Env.get());
+    }
+
+    @Test
+    public void testErrorIs500() throws Exception {
+        HttpServletResponse res = response();
+
+        servlet.service(request("GET", "/error"), res);
+
+        verify(res).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+        assertNull(Env.get());
+    }
+
+    @Test
+    public void testSetsNosniff() throws Exception {
+        HttpServletResponse res = response();
+
+        servlet.service(request("GET", "/hello"), res);
+
+        verify(res).setHeader("X-Content-Type-Options", "nosniff");
     }
 
     @Test
