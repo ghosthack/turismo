@@ -535,10 +535,12 @@ public class HttpContext implements Context {
         OutputStream os = exchange.getResponseBody();
         os.write(body);
         if (dropConnection) {
-            // The response is already on the wire. Closing would block
-            // in the JDK's request-body drain; an interrupt makes that
-            // read abort and the socket drop.
-            abandonUnreadRequest(os);
+            // The response is already written. Closing drains the
+            // request body and, once that blocks, has to be abandoned.
+            // Interrupting before close() aborts the socket immediately
+            // and a reset can discard the response the client has not
+            // read yet.
+            abortBlockingDrain(os::close);
         } else {
             os.close();
         }
@@ -653,21 +655,6 @@ public class HttpContext implements Context {
             Thread.interrupted();
             if (shutdown) {
                 Thread.currentThread().interrupt();
-            }
-        }
-    }
-
-    /** Closes a response whose bytes are already written, without draining. */
-    private void abandonUnreadRequest(OutputStream os) throws IOException {
-        boolean already = Thread.currentThread().isInterrupted();
-        if (!already) {
-            Thread.currentThread().interrupt();
-        }
-        try {
-            os.close();
-        } finally {
-            if (!already) {
-                Thread.interrupted();
             }
         }
     }

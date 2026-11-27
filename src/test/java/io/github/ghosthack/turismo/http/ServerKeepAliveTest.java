@@ -133,7 +133,7 @@ public class ServerKeepAliveTest {
         Exchange exchange = readUntilClosed(requestWithLength("POST", "/f",
                 "application/x-www-form-urlencoded", 3_000_000, "a=1")
                 + request("GET", "/next", null, null));
-        assertEquals(1, exchange.responses.size());
+        assertEquals(1, exchange.responses.size(), exchange.raw);
         RawResponse tooLarge = exchange.responses.get(0);
         assertEquals(413, tooLarge.status);
         assertEquals("Content Too Large", tooLarge.body);
@@ -168,7 +168,7 @@ public class ServerKeepAliveTest {
         Exchange exchange = readUntilClosed(
                 request("POST", "/only", "text/plain", body)
                 + request("GET", "/next", null, null));
-        assertEquals(1, exchange.responses.size());
+        assertEquals(1, exchange.responses.size(), exchange.raw);
         assertEquals(405, exchange.responses.get(0).status);
         assertEquals("Method Not Allowed", exchange.responses.get(0).body);
         assertTrue(exchange.responses.get(0).close);
@@ -183,7 +183,7 @@ public class ServerKeepAliveTest {
         Exchange exchange = readUntilClosed(
                 request("POST", "/missing", "text/plain", body)
                 + request("GET", "/next", null, null));
-        assertEquals(1, exchange.responses.size());
+        assertEquals(1, exchange.responses.size(), exchange.raw);
         assertEquals(404, exchange.responses.get(0).status);
         assertTrue(exchange.responses.get(0).close);
         assertNotEquals(Exchange.End.TIMEOUT, exchange.end);
@@ -199,7 +199,7 @@ public class ServerKeepAliveTest {
         Exchange exchange = readUntilClosed(
                 request("POST", "/f", "text/plain", body)
                 + request("GET", "/next", null, null));
-        assertEquals(1, exchange.responses.size());
+        assertEquals(1, exchange.responses.size(), exchange.raw);
         assertEquals(200, exchange.responses.get(0).status);
         assertEquals("posted", exchange.responses.get(0).body);
         assertTrue(exchange.responses.get(0).close);
