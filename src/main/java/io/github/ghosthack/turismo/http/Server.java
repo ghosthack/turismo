@@ -223,7 +223,9 @@ public class Server {
             // Client may have disconnected
         } finally {
             if (!aborted) {
-                exchange.close();
+                // finish() has usually closed it. This also covers a
+                // failure before then, without waiting out an unread body.
+                ctx.closeExchange();
             }
         }
     }

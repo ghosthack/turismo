@@ -17,6 +17,7 @@
 package io.github.ghosthack.turismo.http;
 
 import java.io.ByteArrayOutputStream;
+import java.io.FilterInputStream;
 import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -72,6 +73,22 @@ public class HttpContext implements Context {
     public static final String DEFAULT_BINARY_CONTENT_TYPE =
             "application/octet-stream";
 
+    /**
+     * Unread request bytes discarded so a keep-alive connection can
+     * carry the next request. The JDK server itself only discards about
+     * this much ({@code sun.net.httpserver.drainAmount}) and then waits
+     * until the declared length has arrived, which swallows a pipelined
+     * request. Anything larger is not waited on.
+     */
+    private static final int MAX_DISCARD_BYTES = 64 * 1024;
+
+    /**
+     * How long a response close may block while the JDK drains an unread
+     * body before that read is abandoned. Long enough for the response
+     * bytes already queued to be written, short of waiting out the body.
+     */
+    private static final long DRAIN_ABORT_MILLIS = 200;
+
     private final HttpExchange exchange;
     private int statusCode = 200;
     private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
@@ -81,6 +98,16 @@ public class HttpContext implements Context {
     /** Whether writing the streaming body to the client failed. */
     private boolean writeFailed;
     private Map<String, List<String>> queryParams;
+    /** The request body, wrapped so a partial read can be finished here. */
+    private RequestBody requestBody;
+    /** Bytes of the request body the handler (or a discard) has read. */
+    private long requestBodyRead;
+    /** Whether the request body was read through to EOF. */
+    private boolean requestBodyEof;
+    /** The response must not leave this exchange on the keep-alive path. */
+    private boolean dropConnection;
+    /** {@link #closeExchange()} has already run. */
+    private boolean exchangeClosed;
 
     /**
      * Creates a context wrapping the given HTTP exchange.
@@ -127,7 +154,10 @@ public class HttpContext implements Context {
 
     @Override
     public InputStream body() {
-        return exchange.getRequestBody();
+        if (requestBody == null) {
+            requestBody = new RequestBody(exchange.getRequestBody());
+        }
+        return requestBody;
     }
 
     /**
@@ -227,6 +257,13 @@ public class HttpContext implements Context {
     public OutputStream stream() throws IOException {
         if (stream == null) {
             rawOutput = true;
+            // Headers are sent now, before the handler returns. A body
+            // that is already too large to discard cannot stay on a
+            // keep-alive connection; a small one is discarded in finish
+            // if the handler never reads it.
+            if (unreadBodyTooLarge()) {
+                exchange.getResponseHeaders().set("Connection", "close");
+            }
             defaultHeaders(allowsBody());
             if (mayHaveBody()) {
                 // The body is chunked, and a message with both framings
@@ -235,6 +272,13 @@ public class HttpContext implements Context {
                 exchange.sendResponseHeaders(statusCode, 0);
                 stream = new BodyStream(exchange.getResponseBody());
                 buffer.writeTo(stream);
+            } else if (unreadBodyTooLarge()) {
+                // No response body, so the JDK closes the exchange as
+                // soon as the headers are sent and would then wait for
+                // this unread request body
+                abortBlockingDrain(() ->
+                        exchange.sendResponseHeaders(statusCode, -1));
+                stream = OutputStream.nullOutputStream();
             } else {
                 exchange.sendResponseHeaders(statusCode, -1);
                 stream = OutputStream.nullOutputStream();
@@ -262,36 +306,45 @@ public class HttpContext implements Context {
      * one (204, 304); a HEAD response still carries the
      * {@code Content-Length} its GET would have.
      *
+     * <p>A request body that was not read through to EOF is discarded
+     * when the declared length is small enough to read safely, so the
+     * connection can be reused. A larger remainder, including a chunked
+     * body, is not waited on: the response carries
+     * {@code Connection: close} and the socket is dropped. That covers
+     * a 413, 405 or 404 and a successful handler that never reads the body.
+     *
      * @throws IOException if an I/O error occurs while sending
      */
     public void finish() throws IOException {
-        if (stream != null) {
-            try {
-                // Not `stream`, whose close() only flushes
-                exchange.getResponseBody().close();
-            } finally {
-                exchange.close();
-            }
+        try {
+            dropConnection = releaseUnreadBody();
+            writeResponse();
+        } finally {
+            closeExchange();
+        }
+    }
+
+    /**
+     * Closes the exchange. Safe to call more than once. When the request
+     * body is still unread and too large to discard, the JDK's drain is
+     * not waited out: it would hold the connection until the declared
+     * length arrived and a pipelined request would never be read.
+     */
+    void closeExchange() {
+        if (exchangeClosed) {
+            exchange.close();
             return;
         }
-        byte[] body = buffer.toByteArray();
-        // No body for HEAD (including HEAD served by a GET route) or for
-        // status codes that forbid one
-        boolean sendBody = body.length > 0 && mayHaveBody();
-        defaultHeaders(body.length > 0 && allowsBody());
-        if (!sendBody && body.length > 0 && isHead() && allowsBody()) {
-            // The JDK server takes a HEAD length only from the headers
-            exchange.getResponseHeaders().set("Content-Length",
-                    Integer.toString(body.length));
-        }
-        exchange.sendResponseHeaders(statusCode,
-                sendBody ? body.length : -1);
-        if (sendBody) {
-            try (OutputStream os = exchange.getResponseBody()) {
-                os.write(body);
+        exchangeClosed = true;
+        try {
+            if (dropConnection || unreadBodyTooLarge()) {
+                abortBlockingDrain(exchange::close);
+            } else {
+                exchange.close();
             }
+        } catch (IOException ignored) {
+            // Client may have disconnected
         }
-        exchange.close();
     }
 
     /**
@@ -325,6 +378,46 @@ public class HttpContext implements Context {
         }
         if (!headers.containsKey("X-Content-Type-Options")) {
             headers.set("X-Content-Type-Options", "nosniff");
+        }
+    }
+
+    /**
+     * The request body handed to handlers. Closing it does not close the
+     * JDK stream: that drain stops after about {@link #MAX_DISCARD_BYTES}
+     * and then blocks until {@code Content-Length} is satisfied, so a
+     * pipelined request is never read. {@link #finish()} discards a small
+     * remainder or drops the connection instead.
+     */
+    private final class RequestBody extends FilterInputStream {
+        RequestBody(InputStream in) {
+            super(in);
+        }
+
+        @Override
+        public int read() throws IOException {
+            int n = in.read();
+            note(n);
+            return n;
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) throws IOException {
+            int n = in.read(b, off, len);
+            note(n);
+            return n;
+        }
+
+        private void note(int n) {
+            if (n < 0) {
+                requestBodyEof = true;
+            } else if (n > 0) {
+                requestBodyRead += n;
+            }
+        }
+
+        @Override
+        public void close() {
+            // See the class comment. The bytes stay available to finish().
         }
     }
 
@@ -394,6 +487,181 @@ public class HttpContext implements Context {
         } catch (IOException ignored) {
             // Client may have disconnected
         }
+    }
+
+    /**
+     * Sends the status and headers, then the buffered or streaming body.
+     * When {@link #dropConnection} is set, {@code Connection: close} is
+     * written with the headers and the unread request body is not drained.
+     */
+    private void writeResponse() throws IOException {
+        if (stream != null) {
+            // Not `stream`, whose close() only flushes. Closing writes
+            // the chunk trailer and then drains the request body.
+            OutputStream raw = exchange.getResponseBody();
+            if (dropConnection) {
+                abortBlockingDrain(raw::close);
+            } else {
+                raw.close();
+            }
+            return;
+        }
+        byte[] body = buffer.toByteArray();
+        // No body for HEAD (including HEAD served by a GET route) or for
+        // status codes that forbid one
+        boolean sendBody = body.length > 0 && mayHaveBody();
+        defaultHeaders(body.length > 0 && allowsBody());
+        if (dropConnection) {
+            exchange.getResponseHeaders().set("Connection", "close");
+        }
+        if (!sendBody && body.length > 0 && isHead() && allowsBody()) {
+            // The JDK server takes a HEAD length only from the headers
+            exchange.getResponseHeaders().set("Content-Length",
+                    Integer.toString(body.length));
+        }
+        if (!sendBody) {
+            // A length of -1 makes the JDK close the exchange itself,
+            // which drains the request body, so that close has to be
+            // the one that is abandoned
+            if (dropConnection) {
+                abortBlockingDrain(() ->
+                        exchange.sendResponseHeaders(statusCode, -1));
+            } else {
+                exchange.sendResponseHeaders(statusCode, -1);
+            }
+            return;
+        }
+        exchange.sendResponseHeaders(statusCode, body.length);
+        OutputStream os = exchange.getResponseBody();
+        os.write(body);
+        if (dropConnection) {
+            // The response is already written. Closing drains the
+            // request body and, once that blocks, has to be abandoned.
+            // Interrupting before close() aborts the socket immediately
+            // and a reset can discard the response the client has not
+            // read yet.
+            abortBlockingDrain(os::close);
+        } else {
+            os.close();
+        }
+    }
+
+    /**
+     * Discards a small unread remainder, or decides the connection has
+     * to be closed. Returns {@code true} when the body was not read
+     * through to EOF and must not be waited on.
+     */
+    private boolean releaseUnreadBody() throws IOException {
+        if (requestBodyEof) {
+            return false;
+        }
+        Long declared = declaredBodyLength();
+        if (declared == null) {
+            return true;
+        }
+        long remaining = declared - requestBodyRead;
+        if (remaining <= 0) {
+            return false;
+        }
+        if (remaining > MAX_DISCARD_BYTES) {
+            return true;
+        }
+        discard(remaining);
+        return !requestBodyEof;
+    }
+
+    /** A declared length still unread, or a chunked body not read to EOF. */
+    private boolean unreadBodyTooLarge() {
+        if (requestBodyEof) {
+            return false;
+        }
+        Long declared = declaredBodyLength();
+        if (declared == null) {
+            return true;
+        }
+        return declared - requestBodyRead > MAX_DISCARD_BYTES;
+    }
+
+    /**
+     * The declared length, {@code 0} when the request has no body, or
+     * {@code null} for a chunked body (no length to discard safely).
+     */
+    private Long declaredBodyLength() {
+        Headers headers = exchange.getRequestHeaders();
+        String encoding = headers.getFirst("Transfer-Encoding");
+        if (encoding != null && encoding.equalsIgnoreCase("chunked")) {
+            return null;
+        }
+        String length = headers.getFirst("Content-Length");
+        if (length == null || length.isBlank()) {
+            return 0L;
+        }
+        try {
+            long n = Long.parseLong(length.trim());
+            return n < 0 ? null : n;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Reads the rest of a fixed-length body, including the read that
+     * reports EOF, so the bytes of a pipelined request stay unread.
+     */
+    private void discard(long remaining) throws IOException {
+        InputStream in = body();
+        byte[] buf = new byte[8192];
+        while (remaining > 0) {
+            int n = in.read(buf, 0, (int) Math.min(buf.length, remaining));
+            if (n < 0) {
+                return;
+            }
+            if (n == 0) {
+                throw new IOException("Unable to discard the request body");
+            }
+            remaining -= n;
+        }
+        in.read();
+    }
+
+    /**
+     * Runs a close that writes the response and then drains the request
+     * body. If the drain is still blocked after {@link #DRAIN_ABORT_MILLIS}
+     * the read is interrupted, which drops the socket instead of waiting
+     * for the client to finish sending.
+     */
+    private void abortBlockingDrain(IOAction action) throws IOException {
+        Thread self = Thread.currentThread();
+        Thread watchdog = Thread.ofVirtual().start(() -> {
+            try {
+                Thread.sleep(DRAIN_ABORT_MILLIS);
+            } catch (InterruptedException e) {
+                return;
+            }
+            self.interrupt();
+        });
+        boolean shutdown = false;
+        try {
+            action.run();
+        } finally {
+            watchdog.interrupt();
+            try {
+                watchdog.join();
+            } catch (InterruptedException e) {
+                shutdown = true;
+            }
+            // Drop the flag the drain abort set. A shutdown interrupt
+            // that arrived while waiting for the watchdog is kept.
+            Thread.interrupted();
+            if (shutdown) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    @FunctionalInterface
+    private interface IOAction {
+        void run() throws IOException;
     }
 
     private void checkNotCommitted() {
